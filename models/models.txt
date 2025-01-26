@@ -1,0 +1,69 @@
+// package models
+
+// import (
+// 	"database/sql"
+// 	"time"
+// )
+
+// // type User struct {
+// // 	FirstName string    `json:"first_name"`
+// // 	LastName  string    `json:"last_name"`
+// // 	Mail      string    `json:"mail"`
+// // 	Password  string    `json:"password"`
+// // 	Maso      string    `json:"maso"`
+// // 	Role      string    `json:"role"`
+// // 	CreatedAt time.Time `json:"created_at"`
+// // }
+
+// type Post struct {
+// 	ID                  int            `json:"id"`
+// 	UserMail            string         `json:"user_mail"`
+// 	VerifiedTeacherMail sql.NullString `json:"verified_teacher_mail,omitempty"`
+// 	Title               string         `json:"title"`
+// 	Description         string         `json:"description"`
+// 	CreatedAt           time.Time      `json:"created_at"`
+// }
+
+// type PostTopic struct {
+// 	Topic  string `json:"topic"`
+// 	PostID int    `json:"post_id"`
+// }
+
+// type Rating struct {
+// 	ID        int           `json:"id"`
+// 	UserMail  string        `json:"user_mail"`
+// 	PostID    int           `json:"post_id"`
+// 	CreatedAt time.Time     `json:"created_at"`
+// 	Stars     sql.NullInt64 `json:"stars,omitempty"`
+// 	IsLike    sql.NullBool  `json:"is_like,omitempty"`
+// }
+
+// type Comment struct {
+// 	ID        int            `json:"id"`
+// 	UserMail  string         `json:"user_mail"`
+// 	PostID    int            `json:"post_id"`
+// 	Content   sql.NullString `json:"content,omitempty"`
+// 	ParentID  sql.NullInt64  `json:"parent_id,omitempty"`
+// 	CreatedAt time.Time      `json:"created_at"`
+// }
+
+// type LikeComment struct {
+// 	UserMail        string `json:"user_mail"`
+// 	CommentID       int    `json:"comment_id"`
+// 	CommentUserMail string `json:"comment_user_mail"`
+// 	CommentPostID   int    `json:"comment_post_id"`
+// }
+
+// type Testcase struct {
+// 	ID       int    `json:"id"`
+// 	PostID   int    `json:"post_id"`
+// 	Input    string `json:"input"`
+// 	Expected string `json:"expected"`
+// }
+
+// type File struct {
+// 	ID       int            `json:"id"`
+// 	UserMail string         `json:"user_mail"`
+// 	Title    sql.NullString `json:"title,omitempty"`
+// 	Path     sql.NullString `json:"path,omitempty"`
+// }
