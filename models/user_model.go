@@ -13,3 +13,9 @@ type User struct {
 	Role      string    `json:"role" gorm:"type:varchar(50);not null"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
+type GoogleUser struct {
+	Email         string `json:"email"`
+	VerifiedEmail bool   `json:"verified_email"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+}

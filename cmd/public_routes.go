@@ -17,4 +17,10 @@ func publicRoutes(app *fiber.App) {
 	app.Get("/post/:id/comments", handlers.GetPostComment)
 	app.Put("/comment/:id", handlers.UpdateComment)
 	app.Delete("/comment/:id", handlers.DeleteComment)
+
+	app.Get("/jobe/languages", handlers.CheckJobeLanguages)
+	app.Post("/jobe/files", handlers.UploadFileToJobe)
+	// app.Post("/jobe/submit", handlers.SubmitCodeHandler)
+
+	app.Post("/auth/google", handlers.GoogleAuthHandler)
 }

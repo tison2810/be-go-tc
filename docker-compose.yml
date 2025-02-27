@@ -9,7 +9,14 @@ services:
             - "3000:3000"
         volumes:
             - .:/usr/src/app
+            - ../test:/usr/src/app/test
         command: air cmd/main.go -b 0.0.0.0
+        depends_on:
+          - db
+          - jobe
+        networks:
+          - backend-network
+          
     db:
         image: postgres:alpine
         environment:
@@ -20,6 +27,8 @@ services:
             - "5432:5432"
         volumes:
             - postgres-db:/var/lib/postgresql/data
+        networks:
+          - backend-network
     pgadmin:
         image: dpage/pgadmin4
         environment:
@@ -30,6 +39,19 @@ services:
             - "8001:8001"
         depends_on:
             - db
-
+        networks:
+          - backend-network
+    jobe:
+        build: ./jobe  
+        container_name: jobe
+        ports:
+            - "4000:80"
+        restart: always
+        networks:
+            - backend-network
 volumes:
     postgres-db:
+
+networks:
+  backend-network:
+    driver: bridge
