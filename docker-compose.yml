@@ -1,7 +1,7 @@
 version: '4.37'
 
 services:
-    web:
+    backend:
         build: .
         env_file:
             - .env
@@ -42,13 +42,39 @@ services:
         networks:
           - backend-network
     jobe:
-        build: ./jobe  
+        build: ../jobe
         container_name: jobe
         ports:
             - "4000:80"
         restart: always
         networks:
             - backend-network
+    flask:
+        build: ../flask_app
+        env_file:
+            - .env
+        ports:
+            - "5000:5000"
+        volumes:
+            - ../flask_app:/usr/src/flask_app
+        depends_on:
+            - db
+        networks:
+            - backend-network
+    frontend:
+        build: ../frontend
+        ports:
+            - "3001:3001"  # Next.js chạy mặc định trên 3000, nhưng ta map ra ngoài 8080
+        volumes:
+            - ../frontend:/usr/src/frontend
+            - /usr/src/frontend/node_modules
+        depends_on:
+            - backend
+        networks:
+            - backend-network
+        environment:
+            - PORT = 3001
+
 volumes:
     postgres-db:
 
