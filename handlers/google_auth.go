@@ -22,8 +22,6 @@ type GoogleTokenResponse struct {
 }
 
 func GoogleAuthHandler(c *fiber.Ctx) error {
-	fmt.Println("Received request at /auth/google") // Kiểm tra request đến chưa
-
 	var request struct {
 		Code string `json:"code"`
 	}
@@ -31,11 +29,9 @@ func GoogleAuthHandler(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
-	fmt.Println("OAuth Code received:", request.Code)
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 	clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	redirectURI := os.Getenv("GOOGLE_REDIRECT_URI")
-	fmt.Println("GOOGLE_REDIRECT_URI:", redirectURI)
 
 	tokenURL := "https://oauth2.googleapis.com/token"
 	data := fmt.Sprintf(
@@ -50,7 +46,6 @@ func GoogleAuthHandler(c *fiber.Ctx) error {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	fmt.Println("Google API Response:", string(body)) // In response từ Google để debug
 	var tokenRes GoogleTokenResponse
 	json.Unmarshal(body, &tokenRes)
 
@@ -88,7 +83,6 @@ func GoogleAuthHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"token": jwtToken, "user": dbUser})
 }
 
-// Lấy thông tin user từ Google API
 func getGoogleUserInfo(accessToken string) (*models.GoogleUser, error) {
 	url := "https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + accessToken
 	resp, err := http.Get(url)

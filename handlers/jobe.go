@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/tison2810/be-go-tc/models"
+	"github.com/tison2810/be-go-tc/services"
 )
 
 func CheckJobeLanguages(c *fiber.Ctx) error {
@@ -31,81 +35,256 @@ func CheckJobeLanguages(c *fiber.Ctx) error {
 	return c.SendString(fmt.Sprintf("Supported Languages: %s", body))
 }
 
-func UploadFileToJobe(c *fiber.Ctx) error {
-	// Nhận file từ request
+func generateFileID() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const length = 8
+	var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func UploadFileToJobeHandler(c *fiber.Ctx) error {
 	file, err := c.FormFile("file")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).SendString("File upload failed")
+		return c.Status(fiber.StatusBadRequest).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   "Không thể đọc file từ request",
+		})
 	}
 
-	// Mở file để đọc nội dung
 	src, err := file.Open()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString("Cannot open uploaded file")
+		return c.Status(fiber.StatusInternalServerError).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   "Không thể mở file",
+		})
 	}
 	defer src.Close()
 
-	// Mã hóa nội dung file thành Base64
-	encodedData, err := encodeFileToBase64(src)
+	fileContents, err := io.ReadAll(src)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString("Encoding to Base64 failed")
+		return c.Status(fiber.StatusInternalServerError).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Không thể đọc nội dung file: %v", err),
+		})
 	}
 
-	// Gửi file lên Jobe và nhận lại file_id
-	fileID, err := postBase64FileToJobe(file.Filename, encodedData)
+	fileID := generateFileID()
+
+	base64Contents := base64.StdEncoding.EncodeToString(fileContents)
+
+	requestData := models.UploadFileRequest{
+		FileContents: base64Contents,
+	}
+	jsonData, err := json.Marshal(requestData)
 	if err != nil {
-		log.Println("Upload to Jobe failed:", err)
-		return c.Status(fiber.StatusInternalServerError).SendString("Upload to Jobe failed")
+		return c.Status(fiber.StatusInternalServerError).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Lỗi khi marshal JSON: %v", err),
+		})
+	}
+	jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
+	url := fmt.Sprintf("%s/files/%s", jobeServerURL, fileID)
+	log.Printf("Sending request to Jobe: %s", url) // Log URL
+
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Lỗi khi tạo request: %v", err),
+		})
 	}
 
-	// Trả về file_id cho client
-	return c.JSON(fiber.Map{"file_id": fileID})
-}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 
-// Mã hóa file thành Base64
-func encodeFileToBase64(src io.Reader) (string, error) {
-	// Đọc toàn bộ nội dung file
-	data, err := io.ReadAll(src)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
-	}
-
-	// Mã hóa thành Base64
-	encoded := base64.StdEncoding.EncodeToString(data)
-	return encoded, nil
-}
-
-// Gửi nội dung file đã mã hóa Base64 lên Jobe và nhận lại file_id
-func postBase64FileToJobe(filename, base64Content string) (string, error) {
-	jobeURL := "http://jobe:80/jobe/index.php/restapi/files"
-
-	// Chuẩn bị payload JSON
-	payload := map[string]string{
-		"file_contents": base64Content,
-		"filename":      filename,
-	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	// Gửi request POST đến Jobe
-	resp, err := http.Post(jobeURL, "application/json", bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		return "", err
+		return c.Status(fiber.StatusInternalServerError).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Lỗi khi gửi request tới Jobe: %v", err),
+		})
 	}
 	defer resp.Body.Close()
 
-	// Đọc phản hồi từ Jobe
-	body, _ := io.ReadAll(resp.Body)
-	log.Println("Jobe Response:", string(body)) // Debug Response
+	log.Printf("Jobe response status: %d", resp.StatusCode)
 
-	// Parse JSON response để lấy file_id
-	var result models.UploadResponse
-	err = json.Unmarshal(body, &result)
+	switch resp.StatusCode {
+	case http.StatusNoContent: // 204
+		return c.JSON(models.FileUploadResponse{
+			Success: true,
+			FileID:  fileID,
+			Message: "File uploaded successfully to Jobe",
+		})
+	case http.StatusBadRequest: // 400
+		return c.Status(fiber.StatusBadRequest).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   "Bad request - invalid file contents or missing parameters",
+		})
+	case http.StatusNotFound: // 404
+		return c.Status(fiber.StatusNotFound).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   "Jobe server endpoint not found",
+		})
+	case http.StatusInternalServerError: // 500
+		return c.Status(fiber.StatusInternalServerError).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   "Jobe server failed to write file to cache",
+		})
+	default:
+		return c.Status(fiber.StatusInternalServerError).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Unexpected response code from Jobe: %d", resp.StatusCode),
+		})
+	}
+}
+
+func CheckFile(c *fiber.Ctx) error {
+	fileID := c.Params("id")
+	url := fmt.Sprintf("http://jobe:80/jobe/index.php/restapi/files/%s", fileID)
+	resp, err := http.Head(url)
 	if err != nil {
-		return "", fmt.Errorf("error parsing Jobe response: %s", body)
+		log.Println("Error connecting to Jobe Server:", err)
+		return c.Status(fiber.StatusInternalServerError).SendString("Cannot connect to Jobe Server")
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusNoContent: // 204
+		return c.SendString("File exists in Jobe cache")
+	case http.StatusBadRequest: // 400
+		return c.SendString("Missing fileID in url")
+	case http.StatusNotFound: // 404
+		return c.SendString("File not found in Jobe cache")
+	default:
+		return c.SendString(fmt.Sprintf("Unexpected response code from Jobe: %d", resp.StatusCode))
+	}
+}
+
+func SubmitRun(c *fiber.Ctx) error {
+	jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
+	// postIDStr := c.Query("post_id")
+	// studentMail := c.Locals("user_mail").(string)
+	postIDStr := "6b739c91-0312-49b0-8f9e-fb3399074682"
+	// postID := uuid.Parse(postIDStr)
+	studentMail := "son.nguyenthai@hcmut.edu.vn"
+
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.SubmitRunResponse{
+			Status: http.StatusBadRequest,
+			Error:  "Invalid post_id",
+		})
 	}
 
-	return result.FileID, nil
+	var runSpec models.RunSpec
+	if err := c.BodyParser(&runSpec); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.SubmitRunResponse{
+			Status: http.StatusBadRequest,
+			Error:  fmt.Sprintf("Invalid run_spec format: %v", err),
+		})
+	}
+
+	requestData := models.SubmitRunRequest{
+		RunSpec: runSpec,
+	}
+	// fmt.Print("--------------------")
+	// fmt.Print(runSpec)
+	// fmt.Print("--------------------")
+	jsonData, err := json.Marshal(requestData)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+			Status: http.StatusInternalServerError,
+			Error:  fmt.Sprintf("Error marshaling JSON: %v", err),
+		})
+	}
+
+	// Gửi request POST tới Jobe server
+	url := fmt.Sprintf("%s/runs", jobeServerURL)
+	log.Printf("Sending request to Jobe: %s", url)
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+			Status: http.StatusInternalServerError,
+			Error:  fmt.Sprintf("Error creating request: %v", err),
+		})
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+			Status: http.StatusInternalServerError,
+			Error:  fmt.Sprintf("Error sending request to Jobe: %v", err),
+		})
+	}
+	defer resp.Body.Close()
+
+	log.Printf("Jobe response status: %d", resp.StatusCode)
+	postService := services.NewPostService()
+	// Xử lý response từ Jobe
+	switch resp.StatusCode {
+	case http.StatusOK: // 200: Run completed
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+				Status: http.StatusInternalServerError,
+				Error:  fmt.Sprintf("Error reading Jobe response: %v", err),
+			})
+		}
+
+		var jobeResult models.JobeRunResult
+		if err := json.Unmarshal(body, &jobeResult); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+				Status: http.StatusInternalServerError,
+				Error:  fmt.Sprintf("Error parsing Jobe response: %v", err),
+			})
+		}
+
+		// Gọi CheckRunResult để kiểm tra và lưu kết quả
+		studentRun, err := postService.CheckRunResult(postID, studentMail, string(body))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+				Status: http.StatusInternalServerError,
+				Error:  fmt.Sprintf("Error checking run result: %v", err),
+			})
+		}
+
+		// Trả về chỉ stdout trong Result
+		return c.JSON(models.SubmitRunResponse{
+			Status: http.StatusOK,
+			Result: jobeResult.Stdout, // Chỉ lấy stdout
+			Score:  studentRun.Score,
+			Log:    studentRun.Log,
+		})
+	case http.StatusAccepted: // 202: Job queued for later execution
+		return c.Status(http.StatusAccepted).JSON(models.SubmitRunResponse{
+			Status: http.StatusAccepted,
+			Result: "Job queued for later execution",
+		})
+	case http.StatusBadRequest: // 400: Bad request
+		return c.Status(fiber.StatusBadRequest).JSON(models.SubmitRunResponse{
+			Status: http.StatusBadRequest,
+			Error:  "Bad request - invalid run_spec or missing parameters",
+		})
+	case http.StatusNotFound: // 404: Not found
+		return c.Status(fiber.StatusNotFound).JSON(models.SubmitRunResponse{
+			Status: http.StatusNotFound,
+			Error:  "Jobe server endpoint not found",
+		})
+	default:
+		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+			Status: http.StatusInternalServerError,
+			Error:  fmt.Sprintf("Unexpected response code from Jobe: %d", resp.StatusCode),
+		})
+	}
 }

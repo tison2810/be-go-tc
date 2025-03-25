@@ -19,8 +19,9 @@ func publicRoutes(app *fiber.App) {
 	app.Delete("/comment/:id", handlers.DeleteComment)
 
 	app.Get("/jobe/languages", handlers.CheckJobeLanguages)
-	app.Post("/jobe/files", handlers.UploadFileToJobe)
-	// app.Post("/jobe/submit", handlers.SubmitCodeHandler)
+	app.Put("/jobe/files", handlers.UploadFileToJobeHandler)
+	app.Head("/jobe/files/:id", handlers.CheckFile)
+	app.Post("/jobe/run", handlers.SubmitRun)
 
 	app.Post("/auth/google", handlers.GoogleAuthHandler)
 }

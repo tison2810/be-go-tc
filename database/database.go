@@ -40,7 +40,7 @@ func ConnectDb() {
 	db.Logger = logger.Default.LogMode(logger.Info)
 
 	log.Println("AutoMigrate")
-	db.AutoMigrate(&models.User{}, &models.Post{}, &models.Comment{}, &models.Testcase{})
+	db.AutoMigrate(&models.User{}, &models.Post{}, &models.Comment{}, &models.Testcase{}, &models.StudentRunTestcase{})
 
 	DB = Dbinstance{
 		Db: db,

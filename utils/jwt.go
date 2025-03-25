@@ -11,7 +11,7 @@ var jwtKey = []byte("super-secret-key")
 func GenerateJWT(email string) (string, error) {
 	claims := &jwt.MapClaims{
 		"email": email,
-		"exp":   time.Now().Add(time.Hour * 24).Unix(),
+		"exp":   time.Now().Add(time.Millisecond * 100).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtKey)
