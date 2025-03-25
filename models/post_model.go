@@ -42,14 +42,13 @@ type PostTopic struct {
 // }
 
 type StudentRunTestcase struct {
-	PostID      uuid.UUID `json:"post_id" gorm:"type:uuid;primaryKey"`
-	FileID      uuid.UUID `json:"file_id" gorm:"type:uuid;primaryKey"`
+	ID          uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
+	PostID      uuid.UUID `json:"post_id" gorm:"type:uuid"`
 	StudentMail string    `json:"student_mail" gorm:"type:varchar(100);primaryKey"`
 	Log         string    `json:"log" gorm:"type:varchar(255)"`
 	Score       int       `json:"score" gorm:"type:int"`
 	Time        time.Time `json:"time" gorm:"autoCreateTime"`
 
-	Post *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	// File   *File `json:"-" gorm:"foreignKey:FileID,StudentMail;references:ID,StudentMail;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Post    *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Student *User `json:"-" gorm:"foreignKey:StudentMail;references:Mail;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }

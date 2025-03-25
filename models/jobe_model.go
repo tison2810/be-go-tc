@@ -46,5 +46,5 @@ type JobeRunResult struct {
 	Stdout  string `json:"stdout"`
 	Stderr  string `json:"stderr"`
 	Cmpinfo string `json:"cmpinfo"`
-	Outcome string `json:"outcome"`
+	Outcome int    `json:"outcome"`
 }

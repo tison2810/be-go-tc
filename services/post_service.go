@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -59,8 +60,8 @@ func (s *PostService) CheckRunResult(
 	} else if jobeResult.Stderr != "" {
 		logMessage = "Runtime error: " + jobeResult.Stderr
 		score = 0
-	} else if jobeResult.Outcome != "success" {
-		logMessage = "Execution failed: " + jobeResult.Outcome
+	} else if jobeResult.Outcome != 15 {
+		logMessage = "Execution failed: " + strconv.Itoa(jobeResult.Outcome)
 		score = 0
 	}
 

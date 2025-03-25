@@ -167,17 +167,12 @@ func CheckFile(c *fiber.Ctx) error {
 }
 
 func SubmitRun(c *fiber.Ctx) error {
-	// Lấy jobeServerURL từ context
-	jobeServerURL, ok := c.Locals("jobeServerURL").(string)
-	if !ok {
-		log.Println("Error: Cannot get jobeServerURL from context")
-		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
-			Status: http.StatusInternalServerError,
-			Error:  "Cannot get jobeServerURL from context",
-		})
-	}
-	postIDStr := c.Query("post_id")
-	studentMail := c.Locals("user_mail").(string)
+	jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
+	// postIDStr := c.Query("post_id")
+	// studentMail := c.Locals("user_mail").(string)
+	postIDStr := "6b739c91-0312-49b0-8f9e-fb3399074682"
+	// postID := uuid.Parse(postIDStr)
+	studentMail := "son.nguyenthai@hcmut.edu.vn"
 
 	postID, err := uuid.Parse(postIDStr)
 	if err != nil {
@@ -187,7 +182,6 @@ func SubmitRun(c *fiber.Ctx) error {
 		})
 	}
 
-	// Đọc dữ liệu từ request body
 	var runSpec models.RunSpec
 	if err := c.BodyParser(&runSpec); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(models.SubmitRunResponse{
@@ -196,18 +190,12 @@ func SubmitRun(c *fiber.Ctx) error {
 		})
 	}
 
-	// Kiểm tra các trường bắt buộc
-	if runSpec.LanguageID == "" || runSpec.SourceCode == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(models.SubmitRunResponse{
-			Status: http.StatusBadRequest,
-			Error:  "Missing required fields: language_id and sourcecode are mandatory",
-		})
-	}
-
-	// Tạo request data
 	requestData := models.SubmitRunRequest{
 		RunSpec: runSpec,
 	}
+	// fmt.Print("--------------------")
+	// fmt.Print(runSpec)
+	// fmt.Print("--------------------")
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
@@ -254,6 +242,14 @@ func SubmitRun(c *fiber.Ctx) error {
 			})
 		}
 
+		var jobeResult models.JobeRunResult
+		if err := json.Unmarshal(body, &jobeResult); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+				Status: http.StatusInternalServerError,
+				Error:  fmt.Sprintf("Error parsing Jobe response: %v", err),
+			})
+		}
+
 		// Gọi CheckRunResult để kiểm tra và lưu kết quả
 		studentRun, err := postService.CheckRunResult(postID, studentMail, string(body))
 		if err != nil {
@@ -263,9 +259,10 @@ func SubmitRun(c *fiber.Ctx) error {
 			})
 		}
 
+		// Trả về chỉ stdout trong Result
 		return c.JSON(models.SubmitRunResponse{
 			Status: http.StatusOK,
-			Result: string(body),
+			Result: jobeResult.Stdout, // Chỉ lấy stdout
 			Score:  studentRun.Score,
 			Log:    studentRun.Log,
 		})
