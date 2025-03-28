@@ -11,6 +11,7 @@ func main() {
 	app := fiber.New()
 	middleware.FiberMiddleware(app)
 	publicRoutes(app)
+	privateRoutes(app)
 
 	app.Listen(":3000")
 }

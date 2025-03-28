@@ -43,14 +43,11 @@ func (s *PostService) CheckRunResult(
 	stdout := strings.TrimSpace(jobeResult.Stdout)
 	expected := strings.TrimSpace(testcase.Expected)
 
-	// Tính score: 100 nếu khớp, 0 nếu không khớp
+	// Tính score: 1 nếu khớp, 0 nếu không khớp
 	score := 0
-	logMessage := "Run completed"
+	logMessage := stdout
 	if stdout == expected {
-		score = 100
-		logMessage = "Output matches expected"
-	} else {
-		logMessage = "Output does not match expected: " + stdout
+		score = 1
 	}
 
 	// Kiểm tra lỗi biên dịch hoặc runtime
@@ -64,8 +61,8 @@ func (s *PostService) CheckRunResult(
 		logMessage = "Execution failed: " + strconv.Itoa(jobeResult.Outcome)
 		score = 0
 	}
-
 	studentRun := models.StudentRunTestcase{
+		ID:          uuid.New(),
 		PostID:      postID,
 		StudentMail: studentMail,
 		Log:         logMessage,

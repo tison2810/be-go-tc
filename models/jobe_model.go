@@ -16,7 +16,7 @@ type RunSpec struct {
 	SourceCode     string          `json:"sourcecode"`               // Bắt buộc: Mã nguồn của chương trình
 	SourceFilename string          `json:"sourcefilename,omitempty"` // Tùy chọn: Tên file của mã nguồn
 	Input          string          `json:"input,omitempty"`          // Tùy chọn: Dữ liệu đầu vào (stdin)
-	FileList       []FileListEntry `json:"file_list,omitempty"`      // Tùy chọn: Danh sách các file (file_id, file_name)
+	FileList       [][]interface{} `json:"file_list,omitempty"`      // Tùy chọn: Danh sách các file (file_id, file_name)
 	Parameters     interface{}     `json:"parameters,omitempty"`     // Tùy chọn: Các tham số (JSON object)
 	Debug          bool            `json:"debug,omitempty"`          // Tùy chọn: Bật debug mode
 }
@@ -38,11 +38,12 @@ type SubmitRunResponse struct {
 	Status int    `json:"status"`
 	Result string `json:"result,omitempty"`
 	Error  string `json:"error,omitempty"`
-	Score  int    `json:"score,omitempty"`
+	Score  int    `json:"score"`
 	Log    string `json:"log,omitempty"`
 }
 
 type JobeRunResult struct {
+	RunID   string `json:"run_id"`
 	Stdout  string `json:"stdout"`
 	Stderr  string `json:"stderr"`
 	Cmpinfo string `json:"cmpinfo"`

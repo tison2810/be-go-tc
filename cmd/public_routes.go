@@ -6,7 +6,7 @@ import (
 )
 
 func publicRoutes(app *fiber.App) {
-	app.Post("/create", handlers.CreatePost)
+	// app.Post("/create", handlers.CreatePost)
 	app.Get("/posts", handlers.GetAllPosts)
 	app.Get("/postsID", handlers.GetAllPostsID)
 	app.Get("/post/:id", handlers.GetPost)

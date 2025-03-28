@@ -170,7 +170,7 @@ func SubmitRun(c *fiber.Ctx) error {
 	jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
 	// postIDStr := c.Query("post_id")
 	// studentMail := c.Locals("user_mail").(string)
-	postIDStr := "6b739c91-0312-49b0-8f9e-fb3399074682"
+	postIDStr := "6ce9aea7-76a1-41d1-a92b-7faa12ecae20"
 	// postID := uuid.Parse(postIDStr)
 	studentMail := "son.nguyenthai@hcmut.edu.vn"
 
@@ -196,6 +196,7 @@ func SubmitRun(c *fiber.Ctx) error {
 	// fmt.Print("--------------------")
 	// fmt.Print(runSpec)
 	// fmt.Print("--------------------")
+	fmt.Print(requestData)
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
@@ -206,8 +207,8 @@ func SubmitRun(c *fiber.Ctx) error {
 
 	// Gửi request POST tới Jobe server
 	url := fmt.Sprintf("%s/runs", jobeServerURL)
-	log.Printf("Sending request to Jobe: %s", url)
-
+	fmt.Printf("Sending request to Jobe: %s", url)
+	fmt.Print(jsonData)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
@@ -229,25 +230,29 @@ func SubmitRun(c *fiber.Ctx) error {
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading Jobe response body: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+			Status: http.StatusInternalServerError,
+			Error:  fmt.Sprintf("Error reading Jobe response: %v", err),
+		})
+	}
+
 	log.Printf("Jobe response status: %d", resp.StatusCode)
+	log.Printf("Jobe response body: %s", string(body))
+
+	// log.Printf("Jobe response status: %d", resp.StatusCode)
+	// log.Printf("Jobe body: %d", resp.Body)
 	postService := services.NewPostService()
 	// Xử lý response từ Jobe
 	switch resp.StatusCode {
-	case http.StatusOK: // 200: Run completed
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
-				Status: http.StatusInternalServerError,
-				Error:  fmt.Sprintf("Error reading Jobe response: %v", err),
-			})
-		}
-
+	case http.StatusOK:
 		var jobeResult models.JobeRunResult
 		if err := json.Unmarshal(body, &jobeResult); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
 				Status: http.StatusInternalServerError,
-				Error:  fmt.Sprintf("Error parsing Jobe response: %v", err),
-			})
+				Error:  fmt.Sprintf("Error parsing Jobe response: %v, body: %s", err, string(body))})
 		}
 
 		// Gọi CheckRunResult để kiểm tra và lưu kết quả

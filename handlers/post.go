@@ -1,14 +1,22 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/tison2810/be-go-tc/models"
-
 	"github.com/tison2810/be-go-tc/database"
+	"github.com/tison2810/be-go-tc/models"
+	"github.com/tison2810/be-go-tc/utils"
 )
+
+var flaskClient *utils.FlaskClient
+
+func init() {
+	flaskClient = utils.NewFlaskClient()
+}
 
 func CreatePost(c *fiber.Ctx) error {
 	post := new(models.Post)
@@ -21,6 +29,7 @@ func CreatePost(c *fiber.Ctx) error {
 
 	post.ID = uuid.New()
 	post.CreatedAt = time.Now()
+	post.Subject = "DSA"
 
 	if post.Testcase != nil {
 		post.Testcase.PostID = post.ID
@@ -31,7 +40,15 @@ func CreatePost(c *fiber.Ctx) error {
 			"error": "Failed to save post and testcase: " + err.Error(),
 		})
 	}
-
+	go func() {
+		trace, err := flaskClient.CallTrace(post.ID.String())
+		if err != nil {
+			log.Printf("Failed to call Flask trace API: %v", err)
+			return
+		}
+		post.Trace = trace
+		fmt.Print(post.Trace)
+	}()
 	return c.Status(fiber.StatusCreated).JSON(post)
 }
 
