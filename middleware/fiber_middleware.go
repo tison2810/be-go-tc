@@ -43,7 +43,7 @@ func AuthMiddleware() fiber.Handler {
 		email, err := utils.VerifyJWT(tokenString)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Invalid or expired token",
+				"error": err.Error(),
 			})
 		}
 
