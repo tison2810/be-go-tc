@@ -49,6 +49,7 @@ func AuthMiddleware() fiber.Handler {
 
 		// Lưu email vào Locals để sử dụng trong handler sau này
 		c.Locals("email", email)
+		c.Locals("token", tokenString)
 		return c.Next()
 	}
 }

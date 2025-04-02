@@ -16,6 +16,15 @@ func FindUserByEmail(db *gorm.DB, email string) (*models.User, error) {
 	return &user, result.Error
 }
 
+func GetMaso(db *gorm.DB, email string) (string, error) {
+	var user models.User
+	result := db.Where("mail = ?", email).First(&user)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return user.Maso, result.Error
+}
+
 func CreateUser(db *gorm.DB, user models.User) (*models.User, error) {
 	result := db.Create(&user)
 	if result.Error != nil {
