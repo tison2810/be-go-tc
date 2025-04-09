@@ -8,12 +8,13 @@ import (
 
 func privateRoutes(app *fiber.App) {
 	private := app.Group("/", middleware.AuthMiddleware())
-	private.Post("/create", handlers.CreatePost)
-	private.Post("/createform", handlers.CreatePostFormData)
+	// private.Post("/create", handlers.CreatePost)
+	private.Post("/create", handlers.CreatePostFormData)
+	private.Put("/post/:id", handlers.UpdatePostFormData)
 	private.Get("/posts", handlers.GetAllPosts)
 	private.Get("/postsID", handlers.GetAllPostsID)
 	private.Get("/post/:id", handlers.GetPost)
-	private.Put("/post/:id", handlers.UpdatePost)
+	// private.Put("/post/:id", handlers.UpdatePost)
 	private.Delete("/delete/:id", handlers.DeletePost)
 	private.Put("/post/:id/like", handlers.LikePost)
 	private.Post("/posts/read", handlers.ReadPost)
@@ -22,10 +23,12 @@ func privateRoutes(app *fiber.App) {
 	private.Get("/sgposts", handlers.GetPostForStudent)
 	private.Post("/verify/:id", handlers.VerifyPost)
 
-	private.Post("/comment", handlers.CreateComment)
+	// private.Post("/comment", handlers.CreateComment)
 	private.Get("/post/:id/comments", handlers.GetPostComment)
-	private.Put("/comment/:id", handlers.UpdateComment)
+	// private.Put("/comment/:id", handlers.UpdateComment)
 	private.Delete("/comment/:id", handlers.DeleteComment)
+	private.Post("/comment", handlers.CreateCommentFormData)
+	private.Put("/comment/:id", handlers.UpdateCommentFormData)
 
 	private.Get("/jobe/languages", handlers.CheckJobeLanguages)
 	private.Put("/jobe/files/:id", handlers.UploadSingleFileToJobeHandler)

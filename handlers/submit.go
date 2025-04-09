@@ -32,6 +32,7 @@ func generateFileID(tokenString string) string {
 }
 
 func UploadTwoFilesHandler(c *fiber.Ctx) error {
+	const maxFileSize = 200 * 1024
 	// Lấy file .cpp
 	cppFile, err := c.FormFile("cpp_file")
 	if err != nil {
@@ -44,6 +45,13 @@ func UploadTwoFilesHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(models.FileUploadResponse{
 			Success: false,
 			Error:   "File cpp_file phải có đuôi .cpp",
+		})
+	}
+
+	if cppFile.Size > maxFileSize {
+		return c.Status(fiber.StatusBadRequest).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("File .cpp vượt quá kích thước tối đa 200KB (kích thước hiện tại: %d bytes)", cppFile.Size),
 		})
 	}
 
@@ -62,8 +70,14 @@ func UploadTwoFilesHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	if hFile.Size > maxFileSize {
+		return c.Status(fiber.StatusBadRequest).JSON(models.FileUploadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("File .h vượt quá kích thước tối đa 200KB (kích thước hiện tại: %d bytes)", hFile.Size),
+		})
+	}
+
 	baseID := generateFileID(c.Locals("token").(string))
-	// baseID := "2112198"
 	cppFileID := fmt.Sprintf("%scpp", baseID) // [xxxxxxx]cpp
 	hFileID := fmt.Sprintf("%sh", baseID)     // [xxxxxxx]h
 

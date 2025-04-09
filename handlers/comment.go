@@ -173,3 +173,127 @@ func GetCommentCount(postID uuid.UUID) int64 {
 		Count(&commentCount)
 	return commentCount
 }
+
+func UpdateCommentFormData(c *fiber.Ctx) error {
+	// Lấy email từ Locals
+	userMail, ok := c.Locals("email").(string)
+	if !ok || userMail == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User email not found in context",
+		})
+	}
+
+	// Lấy comment_id từ params
+	id := c.Params("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Comment ID is required",
+		})
+	}
+	commentID, err := uuid.Parse(id)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid comment ID",
+		})
+	}
+
+	// Tìm comment
+	comment := new(models.Comment)
+	if err := database.DB.Db.Where("id = ? AND is_deleted = ?", commentID, false).First(comment).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Comment not found or already deleted",
+		})
+	}
+
+	// Kiểm tra quyền chỉnh sửa
+	if comment.UserMail != userMail {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "You are not authorized to update this comment",
+		})
+	}
+
+	// Lấy dữ liệu từ form-data
+	content := c.FormValue("content")
+	if content == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Content is required",
+		})
+	}
+
+	// Cập nhật Content
+	comment.Content = content
+
+	// Lưu vào database
+	if err := database.DB.Db.Save(comment).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update comment: " + err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(comment)
+}
+
+func CreateCommentFormData(c *fiber.Ctx) error {
+	// Lấy email từ Locals
+	userMail, ok := c.Locals("email").(string)
+	if !ok || userMail == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User email not found in context",
+		})
+	}
+
+	// Lấy dữ liệu từ form-data
+	postIDStr := c.FormValue("post_id")
+	content := c.FormValue("content")
+	parentIDStr := c.FormValue("parent_id") // Tùy chọn
+
+	// Kiểm tra và parse PostID
+	if postIDStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "PostID is required",
+		})
+	}
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid PostID",
+		})
+	}
+
+	// Kiểm tra Content
+	if content == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Content is required",
+		})
+	}
+
+	// Parse ParentID (nếu có)
+	var parentID uuid.UUID
+	if parentIDStr != "" {
+		if parentID, err = uuid.Parse(parentIDStr); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid ParentID",
+			})
+		}
+	}
+
+	// Tạo comment mới
+	comment := &models.Comment{
+		ID:        uuid.New(),
+		UserMail:  userMail,
+		PostID:    postID,
+		Content:   content,
+		IsDeleted: false,
+		ParentID:  parentID,
+		CreatedAt: time.Now(),
+	}
+
+	// Lưu vào database
+	if err := database.DB.Db.Create(comment).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to save comment: " + err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(comment)
+}
