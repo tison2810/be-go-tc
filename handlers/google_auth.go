@@ -78,8 +78,12 @@ func GoogleAuthHandler(c *fiber.Ctx) error {
 		// }
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "User not found"})
 	}
+	if dbUser.FirstName == "" && dbUser.LastName == "" {
+		dbUser.FirstName, dbUser.LastName = splitName(user.Name)
+		database.DB.Db.Model(&dbUser).Updates(models.User{FirstName: dbUser.FirstName, LastName: dbUser.LastName})
+	}
 
-	jwtToken, _ := utils.GenerateJWT(dbUser.Mail)
+	jwtToken, _ := utils.GenerateJWT(dbUser.Mail, dbUser.Role)
 
 	return c.JSON(fiber.Map{"token": jwtToken, "user": dbUser})
 }

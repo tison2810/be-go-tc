@@ -85,10 +85,13 @@ func GetTestcaseByPostID(postID uuid.UUID) (models.Testcase, error) {
 }
 
 type PostStats struct {
-	PostID       uuid.UUID  `gorm:"column:post_id"`
-	LikeCount    int64      `gorm:"column:like_count"`
-	CommentCount int64      `gorm:"column:comment_count"`
-	LikeID       *uuid.UUID `gorm:"column:like_id"` // ID của like nếu user đã like
+	PostID              uuid.UUID  `gorm:"column:post_id"`
+	LikeCount           int64      `gorm:"column:like_count"`
+	CommentCount        int64      `gorm:"column:comment_count"`
+	LikeID              *uuid.UUID `gorm:"column:like_id"`
+	VerifiedTeacherMail *string    `gorm:"column:verified_teacher_mail"`
+	Views               int        `gorm:"column:views"`
+	Runs                int        `gorm:"column:runs"`
 }
 
 func GetPostStats(userMail string, postIDs []uuid.UUID) []PostStats {
@@ -99,13 +102,26 @@ func GetPostStats(userMail string, postIDs []uuid.UUID) []PostStats {
 
 	database.DB.Db.Raw(`
         SELECT 
-            i.post_id,
-            SUM(CASE WHEN i.type = 'Like' AND i.is_like = true THEN 1 ELSE 0 END) as like_count,
-            SUM(CASE WHEN i.type = 'Comment' THEN 1 ELSE 0 END) as comment_count,
-            MAX(CASE WHEN i.user_mail = ? AND i.type = 'Like' AND i.is_like = true THEN i.id END) as like_id
-        FROM interactions i
-        WHERE i.post_id IN (?)
-        GROUP BY i.post_id
+            p.id as post_id,
+            p.views,
+            p.runs,
+            COALESCE((
+                SELECT COUNT(*) 
+                FROM interactions i 
+                WHERE i.post_id = p.id AND i.is_like = true
+            ), 0) as like_count,
+            COALESCE((
+                SELECT COUNT(*) 
+                FROM comments c 
+                WHERE c.post_id = p.id AND c.is_deleted = false
+            ), 0) as comment_count,
+            MAX(CASE WHEN i.user_mail = ? AND i.is_like = true THEN i.id::text END)::uuid as like_id,
+            tvp.teacher_mail as verified_teacher_mail
+        FROM posts p
+        LEFT JOIN interactions i ON p.id = i.post_id
+        LEFT JOIN teacher_verify_posts tvp ON p.id = tvp.post_id
+        WHERE p.id IN (?)
+        GROUP BY p.id, p.views, p.runs, tvp.teacher_mail
     `, userMail, postIDs).Scan(&stats)
 	return stats
 }

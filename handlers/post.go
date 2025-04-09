@@ -17,6 +17,7 @@ import (
 	"github.com/tison2810/be-go-tc/models"
 	"github.com/tison2810/be-go-tc/services"
 	"github.com/tison2810/be-go-tc/utils"
+	"gorm.io/gorm"
 )
 
 var flaskClient *utils.FlaskClient
@@ -49,7 +50,7 @@ func CreatePost(c *fiber.Ctx) error {
 		})
 	}
 	post.ID = uuid.New()
-	post.CreatedAt = time.Now()
+	post.LastModified = time.Now()
 	post.Subject = "KTLT"
 
 	if post.Testcase != nil {
@@ -116,7 +117,7 @@ func CreatePost(c *fiber.Ctx) error {
 			return
 		}
 		post.Trace = trace
-		fmt.Print(post.Trace)
+		// fmt.Print(post.Trace)
 	}()
 	return c.Status(fiber.StatusCreated).JSON(post)
 }
@@ -148,7 +149,7 @@ func CreatePostFormData(c *fiber.Ctx) error {
 
 	// Tạo UUID cho post
 	post.ID = uuid.New()
-	post.CreatedAt = time.Now()
+	post.LastModified = time.Now()
 
 	if post.Testcase != nil {
 		post.Testcase.PostID = post.ID
@@ -221,7 +222,7 @@ func CreatePostFormData(c *fiber.Ctx) error {
 			log.Printf("Failed to update post trace: %v", err)
 			return
 		}
-		fmt.Print(post.Trace)
+		// fmt.Print(post.Trace)
 	}()
 
 	// Trả về JSON
@@ -280,7 +281,7 @@ func UpdatePost(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
-
+	post.LastModified = time.Now()
 	if err := database.DB.Db.Save(&post).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to update post",
@@ -299,6 +300,7 @@ func UpdatePost(c *fiber.Ctx) error {
 			PostID:   post.ID,
 			Input:    post.Testcase.Input,
 			Expected: post.Testcase.Expected,
+			Code:     post.Testcase.Code,
 		}
 		if err := database.DB.Db.Create(&newTestcase).Error; err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -324,53 +326,6 @@ func DeletePost(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusNoContent).Send(nil)
 }
 
-func CreateInteraction(c *fiber.Ctx) error {
-	// Lấy email từ Locals (do AuthMiddleware cung cấp)
-	userMail, ok := c.Locals("email").(string)
-	if !ok || userMail == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "User email not found in context",
-		})
-	}
-
-	// Parse request body
-	interaction := new(models.Interaction)
-	if err := c.BodyParser(interaction); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse JSON: " + err.Error(),
-		})
-	}
-
-	// Thiết lập các giá trị mặc định
-	interaction.ID = uuid.New()
-	interaction.UserMail = userMail
-	interaction.CreatedAt = time.Now()
-
-	// Validate Type
-	if interaction.Type != "Like" && interaction.Type != "Rating" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Type must be 'Like' or 'Rating'",
-		})
-	}
-
-	// Validate Rating nếu Type là "Rating"
-	if interaction.Type == "Rating" && (interaction.Rating < 0 || interaction.Rating > 5) {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Rating must be between 0 and 5",
-		})
-	}
-
-	// Lưu vào database
-	if err := database.DB.Db.Create(&interaction).Error; err != nil {
-		log.Printf("Failed to save interaction: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to save interaction: " + err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(interaction)
-}
-
 func LikePost(c *fiber.Ctx) error {
 	// Lấy email từ Locals (do AuthMiddleware cung cấp)
 	userMail, ok := c.Locals("email").(string)
@@ -380,147 +335,52 @@ func LikePost(c *fiber.Ctx) error {
 		})
 	}
 
-	// Parse request body
-	interaction := new(models.Interaction)
-	if err := c.BodyParser(interaction); err != nil {
+	// Lấy post_id từ params
+	postIDStr := c.Params("id")
+	if postIDStr == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse JSON: " + err.Error(),
+			"error": "Missing post_id in URL parameter",
+		})
+	}
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid post_id",
 		})
 	}
 
-	// Thiết lập các giá trị mặc định
-	interaction.ID = uuid.New()
-	interaction.UserMail = userMail
-	interaction.CreatedAt = time.Now()
-	interaction.Type = "Like"
-	interaction.Rating = 0
-	interaction.IsLike = true
+	// Dùng transaction để xử lý toggle like
+	var interaction models.Interaction
+	err = database.DB.Db.Transaction(func(tx *gorm.DB) error {
+		// Kiểm tra xem interaction đã tồn tại chưa
+		if err := tx.Where("post_id = ? AND user_mail = ?", postID, userMail).First(&interaction).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				// Nếu chưa tồn tại, tạo mới với IsLike = true
+				interaction = models.Interaction{
+					ID:        uuid.New(),
+					PostID:    postID,
+					UserMail:  userMail,
+					CreatedAt: time.Now(),
+					IsLike:    true,
+				}
+				return tx.Create(&interaction).Error
+			}
+			return err
+		}
 
-	// Lưu vào database
-	if err := database.DB.Db.Create(&interaction).Error; err != nil {
-		log.Printf("Failed to save interaction: %v", err)
+		// Nếu đã tồn tại, toggle IsLike
+		interaction.IsLike = !interaction.IsLike
+		return tx.Save(&interaction).Error
+	})
+
+	if err != nil {
+		log.Printf("Failed to process like: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to save interaction: " + err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(interaction)
-}
-
-func RatingPost(c *fiber.Ctx) error {
-	// Lấy email từ Locals (do AuthMiddleware cung cấp)
-	userMail, ok := c.Locals("email").(string)
-	if !ok || userMail == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "User email not found in context",
-		})
-	}
-
-	// Parse request body
-	interaction := new(models.Interaction)
-	if err := c.BodyParser(interaction); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse JSON: " + err.Error(),
-		})
-	}
-
-	// Thiết lập các giá trị mặc định
-	interaction.ID = uuid.New()
-	interaction.UserMail = userMail
-	interaction.CreatedAt = time.Now()
-	interaction.Type = "Rating"
-	interaction.IsLike = false
-
-	// Lưu vào database
-	if err := database.DB.Db.Create(&interaction).Error; err != nil {
-		log.Printf("Failed to save interaction: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to save interaction: " + err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(interaction)
-}
-func GetAllInteractions(c *fiber.Ctx) error {
-	var interactions []models.Interaction
-	if err := database.DB.Db.Find(&interactions).Error; err != nil {
-		log.Printf("Failed to fetch interactions: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to fetch interactions: " + err.Error(),
-		})
-	}
-	return c.Status(fiber.StatusOK).JSON(interactions)
-}
-
-func GetInteraction(c *fiber.Ctx) error {
-	id := c.Params("id")
-	interaction := new(models.Interaction)
-	if err := database.DB.Db.Where("id = ?", id).First(&interaction).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Interaction not found",
-		})
-	}
-	return c.Status(fiber.StatusOK).JSON(interaction)
-}
-
-func UpdateInteraction(c *fiber.Ctx) error {
-	id := c.Params("id")
-	interaction := new(models.Interaction)
-	if err := database.DB.Db.Where("id = ?", id).First(&interaction).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Interaction not found",
-		})
-	}
-
-	// Parse request body để cập nhật
-	if err := c.BodyParser(interaction); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse JSON: " + err.Error(),
-		})
-	}
-
-	// Validate Type
-	if interaction.Type != "Like" && interaction.Type != "Rating" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Type must be 'Like' or 'Rating'",
-		})
-	}
-
-	// Validate Rating nếu Type là "Rating"
-	if interaction.Type == "Rating" && (interaction.Rating < 0 || interaction.Rating > 5) {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Rating must be between 0 and 5",
-		})
-	}
-
-	// Cập nhật trong database
-	if err := database.DB.Db.Save(&interaction).Error; err != nil {
-		log.Printf("Failed to update interaction: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update interaction: " + err.Error(),
+			"error": "Failed to process like: " + err.Error(),
 		})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(interaction)
-}
-
-func DeleteInteraction(c *fiber.Ctx) error {
-	id := c.Params("id")
-	interaction := new(models.Interaction)
-	if err := database.DB.Db.Where("id = ?", id).First(&interaction).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Interaction not found",
-		})
-	}
-
-	if err := database.DB.Db.Delete(&interaction).Error; err != nil {
-		log.Printf("Failed to delete interaction: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to delete interaction: " + err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusNoContent).Send(nil)
 }
 
 func GetLikeCount(postID uuid.UUID) int64 {
@@ -531,54 +391,19 @@ func GetLikeCount(postID uuid.UUID) int64 {
 	return likeCount
 }
 
-// func GetUserLikeStatus(c *fiber.Ctx) error {
-// 	// Lấy email từ Locals (do AuthMiddleware cung cấp)
-// 	userMail, ok := c.Locals("email").(string)
-// 	if !ok || userMail == "" {
-// 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-// 			"error": "User email not found in context",
-// 		})
-// 	}
-
-// 	// Lấy post_id từ param
-// 	postIDStr := c.Params("id")
-// 	if postIDStr == "" {
-// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-// 			"error": "Missing post_id in URL parameter",
-// 		})
-// 	}
-// 	postID, err := uuid.Parse(postIDStr)
-// 	if err != nil {
-// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-// 			"error": "Invalid post_id",
-// 		})
-// 	}
-
-// 	// Kiểm tra xem người dùng đã Like bài post này chưa
-// 	var interaction models.Interaction
-// 	result := database.DB.Db.Where("user_mail = ? AND post_id = ? AND type = ? AND is_like = ?",
-// 		userMail, postID, "Like", true).First(&interaction)
-
-// 	// Nếu không tìm thấy bản ghi, tức là chưa Like
-// 	if result.Error != nil {
-// 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-// 			"is_liked": false,
-// 		})
-// 	}
-
-// 	// Nếu tìm thấy, trả về is_liked = true
-// 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-// 		"is_liked":       true,
-// 		"interaction_id": interaction.ID,
-// 	})
-// }
-
-type PostWithClass struct {
+type InteractionInfo struct {
+	LikeCount           int64      `json:"like_count"`    // Số lượt like
+	CommentCount        int64      `json:"comment_count"` // Số lượt comment
+	LikeID              *uuid.UUID `json:"like_id"`       // ID của like nếu user đã like, null nếu chưa
+	VerifiedTeacherMail *string    `json:"verified_teacher_mail"`
+	Views               int        `json:"view_count"` // Số lượt xem
+	Runs                int        `json:"run_count"`  // Số lượt chạy
+}
+type PostWithType struct {
 	models.Post
-	Classed      int        `json:"classed"`       // 1: gợi ý, 0: ngẫu nhiên, 2: tìm kiếm
-	LikeCount    int64      `json:"like_count"`    // Số lượt like
-	CommentCount int64      `json:"comment_count"` // Số lượt comment
-	LikeID       *uuid.UUID `json:"like_id"`       // ID của like nếu user đã like, null nếu chưa
+	Author      string          `json:"author"`      // Tên tác giả
+	PostType    int             `json:"post_type"`   // 1: gợi ý, 0: ngẫu nhiên, 2: tìm kiếm
+	Interaction InteractionInfo `json:"interaction"` // Trường interaction mới
 }
 
 func GetPostForStudent(c *fiber.Ctx) error {
@@ -589,7 +414,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		})
 	}
 
-	// Lấy danh sách bài post gợi ý từ Flask
 	var suggestedPostIDs []string
 	suggestedPosts, err := flaskClient.CallSuggest(email)
 	if err != nil {
@@ -598,7 +422,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		suggestedPostIDs = suggestedPosts
 	}
 
-	// Chuyển suggestedPostIDs thành uuid.UUID
 	var suggestedUUIDs []uuid.UUID
 	for _, postID := range suggestedPostIDs {
 		if uid, err := uuid.Parse(postID); err == nil {
@@ -606,7 +429,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		}
 	}
 
-	// Lấy tất cả bài post từ database với Testcase, chỉ lấy các bài chưa bị xóa
 	var allPosts []models.Post
 	if err := database.DB.Db.Preload("Testcase").
 		Where("is_deleted = ?", false).
@@ -617,7 +439,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		})
 	}
 
-	// Tạo danh sách bài post gợi ý (chỉ chứa bài chưa bị xóa)
 	var suggestedPostsList []models.Post
 	for _, post := range allPosts {
 		for _, sugID := range suggestedUUIDs {
@@ -628,7 +449,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		}
 	}
 
-	// Lọc ra các bài post không trùng với gợi ý (chỉ chứa bài chưa bị xóa)
 	var randomPosts []models.Post
 	for _, post := range allPosts {
 		isSuggested := false
@@ -643,7 +463,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		}
 	}
 
-	// Chọn ngẫu nhiên 3 bài từ randomPosts
 	numRandom := 3
 	if len(randomPosts) < numRandom {
 		numRandom = len(randomPosts)
@@ -653,7 +472,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 	})
 	selectedRandomPosts := randomPosts[:numRandom]
 
-	// Tạo danh sách tất cả post IDs cần lấy stats
 	var postIDs []uuid.UUID
 	for _, post := range suggestedPostsList {
 		postIDs = append(postIDs, post.ID)
@@ -662,62 +480,77 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		postIDs = append(postIDs, post.ID)
 	}
 
-	// Lấy stats cho tất cả post trong một truy vấn
 	stats := services.GetPostStats(email, postIDs)
 	statsMap := make(map[uuid.UUID]services.PostStats)
 	for _, stat := range stats {
 		statsMap[stat.PostID] = stat
 	}
 
-	// Tạo danh sách kết quả xen kẽ
-	var resultPosts []PostWithClass
+	var users []models.User
+	if err := database.DB.Db.Find(&users).Error; err != nil {
+		log.Printf("Failed to fetch users: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch users",
+		})
+	}
+	userMap := make(map[string]string)
+	for _, user := range users {
+		userMap[user.Mail] = user.LastName + " " + user.FirstName
+	}
+
+	var resultPosts []PostWithType
 	suggestedCount := len(suggestedPostsList)
 	randomCount := len(selectedRandomPosts)
 	maxLen := suggestedCount + randomCount
 
-	// Xen kẽ bài gợi ý và bài ngẫu nhiên
 	sugIdx, randIdx := 0, 0
 	for i := 0; i < maxLen; i++ {
 		var post models.Post
-		var classed int
+		var postType int
 		if i%2 == 0 && sugIdx < suggestedCount {
 			post = suggestedPostsList[sugIdx]
-			classed = 1
+			postType = 1 // Gợi ý
 			sugIdx++
 		} else if randIdx < randomCount {
 			post = selectedRandomPosts[randIdx]
-			classed = 0
+			postType = 0 // Ngẫu nhiên
 			randIdx++
 		} else if sugIdx < suggestedCount {
 			post = suggestedPostsList[sugIdx]
-			classed = 1
+			postType = 1 // Gợi ý
 			sugIdx++
 		} else {
 			continue
 		}
 
-		// Lấy stats từ map (nếu không có thì mặc định 0)
 		stat, exists := statsMap[post.ID]
 		if !exists {
-			stat = services.PostStats{} // Không có interaction thì để mặc định
+			stat = services.PostStats{}
+		}
+		author := userMap[post.UserMail]
+		if author == "" {
+			author = "Unknown" // Giá trị mặc định nếu không tìm thấy user
 		}
 
-		// Tạo PostWithClass
-		resultPosts = append(resultPosts, PostWithClass{
-			Post:         post,
-			Classed:      classed,
-			LikeCount:    stat.LikeCount,
-			CommentCount: stat.CommentCount,
-			LikeID:       stat.LikeID,
+		resultPosts = append(resultPosts, PostWithType{
+			Post:     post,
+			Author:   author,
+			PostType: postType,
+			Interaction: InteractionInfo{
+				LikeCount:           stat.LikeCount,
+				CommentCount:        stat.CommentCount,
+				LikeID:              stat.LikeID,
+				VerifiedTeacherMail: stat.VerifiedTeacherMail,
+				Views:               stat.Views, // Lấy từ PostStats
+				Runs:                stat.Runs,  // Lấy từ PostStats
+			},
 		})
 	}
 
-	// Trả về danh sách bài post
 	return c.Status(fiber.StatusOK).JSON(resultPosts)
 }
 
 func ReadPost(c *fiber.Ctx) error {
-	// Lấy email từ context
 	email, ok := c.Locals("email").(string)
 	if !ok || email == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -725,10 +558,9 @@ func ReadPost(c *fiber.Ctx) error {
 		})
 	}
 
-	// Lấy post_id và classed từ request body
 	type ReadPostRequest struct {
-		PostID  uuid.UUID `json:"post_id"`
-		Classed int       `json:"classed"`
+		PostID   uuid.UUID `json:"post_id"`
+		PostType int       `json:"post_type"`
 	}
 	req := new(ReadPostRequest)
 	if err := c.BodyParser(req); err != nil {
@@ -737,47 +569,77 @@ func ReadPost(c *fiber.Ctx) error {
 		})
 	}
 
-	// Kiểm tra post tồn tại
-	var post models.Post
-	if err := database.DB.Db.First(&post, "id = ?", req.PostID).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Post not found",
-		})
-	}
+	err := database.DB.Db.Transaction(func(tx *gorm.DB) error {
+		var post models.Post
+		if err := tx.First(&post, "id = ? AND is_deleted = ?", req.PostID, false).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Post not found or has been deleted",
+			})
+		}
 
-	// Lấy user từ database
-	var user models.User
-	if err := database.DB.Db.First(&user, "mail = ?", email).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "User not found",
-		})
-	}
+		var user models.User
+		if err := tx.First(&user, "mail = ?", email).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "User not found",
+			})
+		}
 
-	// Tăng ReadPosts
-	user.ReadPosts++
+		post.Views++
+		switch req.PostType {
+		case 1:
+			post.ViewsBySuggest++
+		case 2:
+			post.ViewsBySearch++
+		}
 
-	// Tăng các trường dựa trên classed
-	switch req.Classed {
-	case 0: // Ngẫu nhiên
-		user.ReadRandomPosts++
-	case 1: // Gợi ý
-		user.ReadSuggestedPosts++
-	case 2: // Tìm kiếm
-		user.ReadSearchPosts++
-	default:
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid classed value",
-		})
-	}
+		user.ReadPosts++
+		switch req.PostType {
+		case 0:
+			user.ReadRandomPosts++
+		case 1:
+			user.ReadSuggestedPosts++
+		case 2:
+			user.ReadSearchPosts++
+		default:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid post_type value",
+			})
+		}
 
-	// Cập nhật user trong database
-	if err := database.DB.Db.Save(&user).Error; err != nil {
+		interaction := models.PostInteraction{
+			ID:       uuid.New(),
+			UserMail: email,
+			PostID:   req.PostID,
+			PostType: req.PostType,
+			Action:   "view",
+		}
+
+		if err := tx.Create(&interaction).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Save(&post).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(&user).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if _, ok := err.(*fiber.Error); ok {
+			return err
+		}
+		log.Printf("Failed to update read stats: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update user: " + err.Error(),
+			"error": "Failed to update read stats",
 		})
 	}
 
-	// Trả về thông tin user sau khi cập nhật
+	var user models.User
+	database.DB.Db.First(&user, "mail = ?", email)
 	return c.Status(fiber.StatusOK).JSON(user)
 }
 
@@ -789,7 +651,6 @@ func SearchPosts(c *fiber.Ctx) error {
 		})
 	}
 
-	// Lấy query từ request
 	query := c.Query("query")
 	if query == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -797,7 +658,6 @@ func SearchPosts(c *fiber.Ctx) error {
 		})
 	}
 
-	// Tìm kiếm bài post trong database, chỉ lấy các bài chưa bị xóa
 	var searchPosts []models.Post
 	if err := database.DB.Db.Preload("Testcase").
 		Where("title LIKE ? OR description LIKE ?", "%"+query+"%", "%"+query+"%").
@@ -809,48 +669,96 @@ func SearchPosts(c *fiber.Ctx) error {
 		})
 	}
 
-	// Tạo danh sách post IDs cần lấy stats
+	// Cập nhật ViewsBySearch và SearchPosts
+	err := database.DB.Db.Transaction(func(tx *gorm.DB) error {
+		for i := range searchPosts {
+			// Tăng Views trong Post
+			searchPosts[i].Views++
+			searchPosts[i].ViewsBySearch++
+			if err := tx.Save(&searchPosts[i]).Error; err != nil {
+				return err
+			}
+
+			// Ghi vào PostInteraction
+			interaction := models.PostInteraction{
+				ID:       uuid.New(),
+				UserMail: email,
+				PostID:   searchPosts[i].ID,
+				PostType: 2, // Search
+				Action:   "view",
+			}
+			if err := tx.Create(&interaction).Error; err != nil {
+				return err
+			}
+		}
+
+		// Tăng ReadSearchPosts trong User
+		var user models.User
+		if err := tx.First(&user, "mail = ?", email).Error; err == nil {
+			user.ReadPosts += len(searchPosts)
+			user.ReadSearchPosts += len(searchPosts)
+			if err := tx.Save(&user).Error; err != nil {
+				log.Printf("Failed to update user ReadSearchPosts: %v", err)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Failed to update search stats: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update search stats",
+		})
+	}
+
 	var postIDs []uuid.UUID
 	for _, post := range searchPosts {
 		postIDs = append(postIDs, post.ID)
 	}
 
-	// Lấy stats cho tất cả post trong một truy vấn
 	stats := services.GetPostStats(email, postIDs)
 	statsMap := make(map[uuid.UUID]services.PostStats)
 	for _, stat := range stats {
 		statsMap[stat.PostID] = stat
 	}
+	var users []models.User
+	if err := database.DB.Db.Find(&users).Error; err != nil {
+		log.Printf("Failed to fetch users: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch users",
+		})
+	}
+	userMap := make(map[string]string)
+	for _, user := range users {
+		userMap[user.Mail] = user.LastName + " " + user.FirstName
+	}
 
-	// Tạo danh sách kết quả với classed = 2
-	var resultPosts []PostWithClass
+	var resultPosts []PostWithType
 	for _, post := range searchPosts {
-		// Lấy stats từ map (nếu không có thì mặc định 0)
 		stat, exists := statsMap[post.ID]
 		if !exists {
-			stat = services.PostStats{} // Không có interaction thì để mặc định
+			stat = services.PostStats{}
+		}
+		author := userMap[post.UserMail]
+		if author == "" {
+			author = "Unknown"
 		}
 
-		resultPosts = append(resultPosts, PostWithClass{
-			Post:         post,
-			Classed:      2,
-			LikeCount:    stat.LikeCount,
-			CommentCount: stat.CommentCount,
-			LikeID:       stat.LikeID,
+		resultPosts = append(resultPosts, PostWithType{
+			Post:     post,
+			Author:   author,
+			PostType: 2, // Tìm kiếm
+			Interaction: InteractionInfo{
+				LikeCount:           stat.LikeCount,
+				CommentCount:        stat.CommentCount,
+				LikeID:              stat.LikeID,
+				VerifiedTeacherMail: stat.VerifiedTeacherMail,
+				Views:               stat.Views, // Lấy từ PostStats
+				Runs:                stat.Runs,  // Lấy từ PostStats
+			},
 		})
 	}
 
-	// Cập nhật SearchPosts trong user
-	var user models.User
-	if err := database.DB.Db.First(&user, "mail = ?", email).Error; err != nil {
-		log.Printf("User not found: %v", err)
-	} else {
-		user.SearchPosts++
-		if err := database.DB.Db.Save(&user).Error; err != nil {
-			log.Printf("Failed to update user SearchPosts: %v", err)
-		}
-	}
-
-	// Trả về danh sách bài post tìm kiếm
 	return c.Status(fiber.StatusOK).JSON(resultPosts)
 }

@@ -1,24 +1,27 @@
 package models
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type Post struct {
-	ID                  uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey"`
-	UserMail            string         `json:"user_mail" gorm:"type:varchar(100);not null"`
-	VerifiedTeacherMail sql.NullString `json:"verified_teacher_mail,omitempty" gorm:"type:varchar(100)"`
-	Subject             string         `json:"subject" gorm:"type:varchar(255);not null"`
-	Title               string         `json:"title" gorm:"type:varchar(255);not null"`
-	Description         string         `json:"description" gorm:"type:text;not null"`
-	CreatedAt           time.Time      `json:"created_at" gorm:"autoCreateTime"`
-	Trace               string         `json:"trace" gorm:"type:varchar(255)"`
-	IsDeleted           bool           `json:"is_deleted" gorm:"type:boolean;default:false"`
-	Topics              []PostTopic    `json:"topics" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Testcase            *Testcase      `json:"testcase" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	ID             uuid.UUID    `json:"id" gorm:"type:uuid;primaryKey"`
+	UserMail       string       `json:"-" gorm:"type:varchar(100);not null"`
+	Subject        string       `json:"subject" gorm:"type:varchar(255);not null"`
+	Title          string       `json:"title" gorm:"type:varchar(255);not null"`
+	Description    string       `json:"description" gorm:"type:text;not null"`
+	LastModified   time.Time    `json:"last_modified" gorm:"autoCreateTime"`
+	Trace          string       `json:"-" gorm:"type:varchar(255)"`
+	IsDeleted      bool         `json:"-" gorm:"type:boolean;default:false"`
+	Views          int          `json:"-" gorm:"type:int;default:0"`
+	ViewsBySuggest int          `json:"-" gorm:"type:int;default:0"`
+	ViewsBySearch  int          `json:"-" gorm:"type:int;default:0"`
+	Runs           int          `json:"-" gorm:"type:int;default:0"`
+	RunsBySuggest  int          `json:"-" gorm:"type:int;default:0"`
+	Testcase       *Testcase    `json:"testcase" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Tags           []PostHasTag `json:"tags" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 type Testcase struct {
@@ -31,22 +34,14 @@ type Testcase struct {
 }
 
 type Interaction struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`              // Sử dụng UUID thay vì int để đồng nhất với các model khác
-	PostID    uuid.UUID `json:"post_id" gorm:"type:uuid;not null"`           // Liên kết với Post.ID
-	UserMail  string    `json:"user_mail" gorm:"type:varchar(100);not null"` // Liên kết với User.mail
+	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
+	PostID    uuid.UUID `json:"post_id" gorm:"type:uuid;not null"`
+	UserMail  string    `json:"user_mail" gorm:"type:varchar(100);not null"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
-	Type      string    `json:"type" gorm:"type:varchar(50);not null"`     // "Like" hoặc "Rating"
-	Rating    int       `json:"rating" gorm:"type:int;default:0"`          // Điểm đánh giá, mặc định là 0
-	IsLike    bool      `json:"is_like" gorm:"type:boolean;default:false"` // Trạng thái Like, mặc định là false
+	IsLike    bool      `json:"is_like" gorm:"type:boolean;default:false"`
 
 	Post *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	User *User `json:"-" gorm:"foreignKey:UserMail;references:Mail;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-}
-
-type PostTopic struct {
-	Topic  string    `json:"topic"`
-	PostID uuid.UUID `json:"post_id" gorm:"type:uuid;primaryKey"`
-	Post   *Post     `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 type StudentRunTestcase struct {
@@ -59,4 +54,38 @@ type StudentRunTestcase struct {
 
 	Post    *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Student *User `json:"-" gorm:"foreignKey:StudentMail;references:Mail;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+type TeacherVerifyPost struct {
+	PostID      uuid.UUID `json:"post_id" gorm:"type:uuid;primaryKey"`
+	TeacherMail string    `json:"teacher_mail" gorm:"type:varchar(100);not null"`
+
+	Post    *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Teacher *User `json:"-" gorm:"foreignKey:TeacherMail;references:Mail;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+type Tag struct {
+	ID   int    `json:"id" gorm:"type:integer;primaryKey;autoIncrement"`
+	Name string `json:"name" gorm:"type:varchar(255);not null"`
+
+	Posts []PostHasTag `json:"-" gorm:"foreignKey:TagID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+type PostHasTag struct {
+	PostID uuid.UUID `json:"post_id" gorm:"type:uuid;primaryKey"`
+	TagID  int       `json:"tag_id" gorm:"type:integer;primaryKey"`
+
+	Post *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Tag  *Tag  `json:"-" gorm:"foreignKey:TagID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+type PostInteraction struct {
+	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
+	UserMail  string    `json:"user_mail" gorm:"type:varchar(100);not null"`
+	PostID    uuid.UUID `json:"post_id" gorm:"type:uuid;not null"`
+	PostType  int       `json:"post_type" gorm:"type:int;not null"`
+	Action    string    `json:"action" gorm:"type:varchar(10);not null"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+
+	Post *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	User *User `json:"-" gorm:"foreignKey:UserMail;references:Mail;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }

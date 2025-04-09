@@ -16,10 +16,11 @@ import (
 	"github.com/tison2810/be-go-tc/models"
 	"github.com/tison2810/be-go-tc/services"
 	"github.com/tison2810/be-go-tc/utils"
+	"gorm.io/gorm"
 )
 
 func generateFileID(tokenString string) string {
-	email, err := utils.VerifyJWT(tokenString)
+	email, _, err := utils.VerifyJWT(tokenString)
 	if err != nil {
 		return ""
 	}
@@ -139,31 +140,77 @@ func RunCode(c *fiber.Ctx) error {
 
 	mainCode := testcase.Code
 
-	var isSuggested bool
+	var postType int
 	suggestedPosts, err := flaskClient.CallSuggest(studentMail)
 	if err != nil {
 		log.Printf("Failed to call Flask suggest API: %v", err)
 	} else {
 		for _, sugID := range suggestedPosts {
 			if sugID == postID.String() {
-				isSuggested = true
+				postType = 1 // Suggest
 				break
+			} else {
+				postType = 0 // Normal
 			}
 		}
 	}
 
-	// Cập nhật RunPosts và RunSuggestedPosts trong user
-	var user models.User
-	if err := database.DB.Db.First(&user, "mail = ?", studentMail).Error; err != nil {
-		log.Printf("User not found: %v", err)
-	} else {
-		user.RunPosts++ // Luôn tăng RunPosts
-		if isSuggested {
-			user.RunSuggestedPosts++ // Tăng RunSuggestedPosts nếu là suggested
+	// Transaction để cập nhật posts, users và thêm vào post_interactions
+	err = database.DB.Db.Transaction(func(tx *gorm.DB) error {
+		// Tăng Runs trong Post
+		var post models.Post
+		if err := tx.First(&post, "id = ? AND is_deleted = ?", postID, false).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(models.SubmitRunResponse{
+				Status: http.StatusNotFound,
+				Error:  "Post not found or has been deleted",
+			})
 		}
-		if err := database.DB.Db.Save(&user).Error; err != nil {
-			log.Printf("Failed to update user RunPosts: %v", err)
+		post.Runs++
+		if postType == 1 {
+			post.RunsBySuggest++
 		}
+		if err := tx.Save(&post).Error; err != nil {
+			return err
+		}
+
+		// Tăng RunPosts trong User
+		var user models.User
+		if err := tx.First(&user, "mail = ?", studentMail).Error; err != nil {
+			log.Printf("User not found: %v", err)
+		} else {
+			user.RunPosts++
+			if postType == 1 {
+				user.RunSuggestedPosts++
+			}
+			if err := tx.Save(&user).Error; err != nil {
+				log.Printf("Failed to update user RunPosts: %v", err)
+			}
+		}
+
+		// Ghi vào PostInteraction
+		interaction := models.PostInteraction{
+			ID:       uuid.New(),
+			UserMail: studentMail,
+			PostID:   postID,
+			PostType: postType,
+			Action:   "run",
+		}
+		if err := tx.Create(&interaction).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if _, ok := err.(*fiber.Error); ok {
+			return err
+		}
+		log.Printf("Failed to process run interaction: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
+			Status: http.StatusInternalServerError,
+			Error:  "Failed to process run interaction",
+		})
 	}
 
 	// Tạo config filename (cố định hoặc dùng post_id tùy ý)

@@ -40,7 +40,7 @@ func AuthMiddleware() fiber.Handler {
 
 		// Xác thực token
 		tokenString := parts[1]
-		email, err := utils.VerifyJWT(tokenString)
+		email, role, err := utils.VerifyJWT(tokenString)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": err.Error(),
@@ -49,6 +49,7 @@ func AuthMiddleware() fiber.Handler {
 
 		// Lưu email vào Locals để sử dụng trong handler sau này
 		c.Locals("email", email)
+		c.Locals("role", role)
 		c.Locals("token", tokenString)
 		return c.Next()
 	}

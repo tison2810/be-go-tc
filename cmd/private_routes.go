@@ -20,6 +20,7 @@ func privateRoutes(app *fiber.App) {
 	private.Post("/posts/search", handlers.SearchPosts)
 
 	private.Get("/sgposts", handlers.GetPostForStudent)
+	private.Post("/verify/:id", handlers.VerifyPost)
 
 	private.Post("/comment", handlers.CreateComment)
 	private.Get("/post/:id/comments", handlers.GetPostComment)
@@ -34,9 +35,9 @@ func privateRoutes(app *fiber.App) {
 	private.Post("/upload", handlers.UploadTwoFilesHandler)
 	private.Get("/runcode/:id", handlers.RunCode)
 
-	private.Post("/interactions", handlers.CreateInteraction)
-	private.Get("/interactions", handlers.GetAllInteractions)
-	private.Get("/interactions/:id", handlers.GetInteraction)
-	private.Put("/interactions/:id", handlers.UpdateInteraction)
-	private.Delete("/interactions/:id", handlers.DeleteInteraction)
+	// private.Post("/interactions", handlers.CreateInteraction)
+	// private.Get("/interactions", handlers.GetAllInteractions)
+	// private.Get("/interactions/:id", handlers.GetInteraction)
+	// private.Put("/interactions/:id", handlers.UpdateInteraction)
+	// private.Delete("/interactions/:id", handlers.DeleteInteraction)
 }

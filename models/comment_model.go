@@ -12,6 +12,7 @@ type Comment struct {
 	PostID    uuid.UUID `json:"post_id" gorm:"type:uuid;not null"`
 	Post      *Post     `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Content   string    `json:"content,omitempty" gorm:"type:text"`
+	IsDeleted bool      `json:"-" gorm:"type:boolean;default:false"`
 	ParentID  uuid.UUID `json:"parent_id,omitempty"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
