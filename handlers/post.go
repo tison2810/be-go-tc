@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tison2810/be-go-tc/database"
 	"github.com/tison2810/be-go-tc/models"
+	"github.com/tison2810/be-go-tc/services"
 	"github.com/tison2810/be-go-tc/utils"
 )
 
@@ -319,7 +320,7 @@ func DeletePost(c *fiber.Ctx) error {
 		})
 	}
 
-	database.DB.Db.Delete(&post)
+	database.DB.Db.Update("is_deleted", true).Where("id = ?", id).First(&post)
 	return c.Status(fiber.StatusNoContent).Send(nil)
 }
 
@@ -522,51 +523,62 @@ func DeleteInteraction(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusNoContent).Send(nil)
 }
 
-func GetUserLikeStatus(c *fiber.Ctx) error {
-	// Lấy email từ Locals (do AuthMiddleware cung cấp)
-	userMail, ok := c.Locals("email").(string)
-	if !ok || userMail == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "User email not found in context",
-		})
-	}
-
-	// Lấy post_id từ param
-	postIDStr := c.Params("id")
-	if postIDStr == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Missing post_id in URL parameter",
-		})
-	}
-	postID, err := uuid.Parse(postIDStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid post_id",
-		})
-	}
-
-	// Kiểm tra xem người dùng đã Like bài post này chưa
-	var interaction models.Interaction
-	result := database.DB.Db.Where("user_mail = ? AND post_id = ? AND type = ? AND is_like = ?",
-		userMail, postID, "Like", true).First(&interaction)
-
-	// Nếu không tìm thấy bản ghi, tức là chưa Like
-	if result.Error != nil {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"is_liked": false,
-		})
-	}
-
-	// Nếu tìm thấy, trả về is_liked = true
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"is_liked":       true,
-		"interaction_id": interaction.ID,
-	})
+func GetLikeCount(postID uuid.UUID) int64 {
+	var likeCount int64
+	database.DB.Db.Model(&models.Interaction{}).
+		Where("post_id = ? AND type = ? AND is_like = ?", postID, "Like", true).
+		Count(&likeCount)
+	return likeCount
 }
+
+// func GetUserLikeStatus(c *fiber.Ctx) error {
+// 	// Lấy email từ Locals (do AuthMiddleware cung cấp)
+// 	userMail, ok := c.Locals("email").(string)
+// 	if !ok || userMail == "" {
+// 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+// 			"error": "User email not found in context",
+// 		})
+// 	}
+
+// 	// Lấy post_id từ param
+// 	postIDStr := c.Params("id")
+// 	if postIDStr == "" {
+// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"error": "Missing post_id in URL parameter",
+// 		})
+// 	}
+// 	postID, err := uuid.Parse(postIDStr)
+// 	if err != nil {
+// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"error": "Invalid post_id",
+// 		})
+// 	}
+
+// 	// Kiểm tra xem người dùng đã Like bài post này chưa
+// 	var interaction models.Interaction
+// 	result := database.DB.Db.Where("user_mail = ? AND post_id = ? AND type = ? AND is_like = ?",
+// 		userMail, postID, "Like", true).First(&interaction)
+
+// 	// Nếu không tìm thấy bản ghi, tức là chưa Like
+// 	if result.Error != nil {
+// 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+// 			"is_liked": false,
+// 		})
+// 	}
+
+// 	// Nếu tìm thấy, trả về is_liked = true
+// 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+// 		"is_liked":       true,
+// 		"interaction_id": interaction.ID,
+// 	})
+// }
 
 type PostWithClass struct {
 	models.Post
-	Classed int `json:"classed"` // 1: gợi ý, 0: ngẫu nhiên
+	Classed      int        `json:"classed"`       // 1: gợi ý, 0: ngẫu nhiên, 2: tìm kiếm
+	LikeCount    int64      `json:"like_count"`    // Số lượt like
+	CommentCount int64      `json:"comment_count"` // Số lượt comment
+	LikeID       *uuid.UUID `json:"like_id"`       // ID của like nếu user đã like, null nếu chưa
 }
 
 func GetPostForStudent(c *fiber.Ctx) error {
@@ -584,7 +596,6 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		log.Printf("Failed to call Flask suggest API: %v", err)
 	} else {
 		suggestedPostIDs = suggestedPosts
-		log.Printf("Suggested post IDs: %v", suggestedPostIDs)
 	}
 
 	// Chuyển suggestedPostIDs thành uuid.UUID
@@ -595,16 +606,18 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		}
 	}
 
-	// Lấy tất cả bài post từ database với Testcase
+	// Lấy tất cả bài post từ database với Testcase, chỉ lấy các bài chưa bị xóa
 	var allPosts []models.Post
-	if err := database.DB.Db.Preload("Testcase").Find(&allPosts).Error; err != nil {
+	if err := database.DB.Db.Preload("Testcase").
+		Where("is_deleted = ?", false).
+		Find(&allPosts).Error; err != nil {
 		log.Printf("Failed to fetch all posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch posts from database",
 		})
 	}
 
-	// Tạo danh sách bài post gợi ý
+	// Tạo danh sách bài post gợi ý (chỉ chứa bài chưa bị xóa)
 	var suggestedPostsList []models.Post
 	for _, post := range allPosts {
 		for _, sugID := range suggestedUUIDs {
@@ -615,7 +628,7 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		}
 	}
 
-	// Lọc ra các bài post không trùng với gợi ý
+	// Lọc ra các bài post không trùng với gợi ý (chỉ chứa bài chưa bị xóa)
 	var randomPosts []models.Post
 	for _, post := range allPosts {
 		isSuggested := false
@@ -630,7 +643,7 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		}
 	}
 
-	// Chọn ngẫu nhiên 3 bài từ randomPosts (hoặc ít hơn nếu không đủ)
+	// Chọn ngẫu nhiên 3 bài từ randomPosts
 	numRandom := 3
 	if len(randomPosts) < numRandom {
 		numRandom = len(randomPosts)
@@ -639,6 +652,22 @@ func GetPostForStudent(c *fiber.Ctx) error {
 		randomPosts[i], randomPosts[j] = randomPosts[j], randomPosts[i]
 	})
 	selectedRandomPosts := randomPosts[:numRandom]
+
+	// Tạo danh sách tất cả post IDs cần lấy stats
+	var postIDs []uuid.UUID
+	for _, post := range suggestedPostsList {
+		postIDs = append(postIDs, post.ID)
+	}
+	for _, post := range selectedRandomPosts {
+		postIDs = append(postIDs, post.ID)
+	}
+
+	// Lấy stats cho tất cả post trong một truy vấn
+	stats := services.GetPostStats(email, postIDs)
+	statsMap := make(map[uuid.UUID]services.PostStats)
+	for _, stat := range stats {
+		statsMap[stat.PostID] = stat
+	}
 
 	// Tạo danh sách kết quả xen kẽ
 	var resultPosts []PostWithClass
@@ -649,31 +678,41 @@ func GetPostForStudent(c *fiber.Ctx) error {
 	// Xen kẽ bài gợi ý và bài ngẫu nhiên
 	sugIdx, randIdx := 0, 0
 	for i := 0; i < maxLen; i++ {
+		var post models.Post
+		var classed int
 		if i%2 == 0 && sugIdx < suggestedCount {
-			// Thêm bài gợi ý với suggested = 1
-			resultPosts = append(resultPosts, PostWithClass{
-				Post:    suggestedPostsList[sugIdx],
-				Classed: 1,
-			})
+			post = suggestedPostsList[sugIdx]
+			classed = 1
 			sugIdx++
 		} else if randIdx < randomCount {
-			// Thêm bài ngẫu nhiên với suggested = 0
-			resultPosts = append(resultPosts, PostWithClass{
-				Post:    selectedRandomPosts[randIdx],
-				Classed: 0,
-			})
+			post = selectedRandomPosts[randIdx]
+			classed = 0
 			randIdx++
 		} else if sugIdx < suggestedCount {
-			// Nếu hết bài ngẫu nhiên, thêm bài gợi ý còn lại
-			resultPosts = append(resultPosts, PostWithClass{
-				Post:    suggestedPostsList[sugIdx],
-				Classed: 1,
-			})
+			post = suggestedPostsList[sugIdx]
+			classed = 1
 			sugIdx++
+		} else {
+			continue
 		}
+
+		// Lấy stats từ map (nếu không có thì mặc định 0)
+		stat, exists := statsMap[post.ID]
+		if !exists {
+			stat = services.PostStats{} // Không có interaction thì để mặc định
+		}
+
+		// Tạo PostWithClass
+		resultPosts = append(resultPosts, PostWithClass{
+			Post:         post,
+			Classed:      classed,
+			LikeCount:    stat.LikeCount,
+			CommentCount: stat.CommentCount,
+			LikeID:       stat.LikeID,
+		})
 	}
 
-	// Trả về danh sách bài post với định dạng giống GetAllPosts
+	// Trả về danh sách bài post
 	return c.Status(fiber.StatusOK).JSON(resultPosts)
 }
 
@@ -750,7 +789,7 @@ func SearchPosts(c *fiber.Ctx) error {
 		})
 	}
 
-	// Lấy query từ request (ví dụ: ?query=hashing)
+	// Lấy query từ request
 	query := c.Query("query")
 	if query == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -758,10 +797,11 @@ func SearchPosts(c *fiber.Ctx) error {
 		})
 	}
 
-	// Tìm kiếm bài post trong database
+	// Tìm kiếm bài post trong database, chỉ lấy các bài chưa bị xóa
 	var searchPosts []models.Post
 	if err := database.DB.Db.Preload("Testcase").
 		Where("title LIKE ? OR description LIKE ?", "%"+query+"%", "%"+query+"%").
+		Where("is_deleted = ?", false).
 		Find(&searchPosts).Error; err != nil {
 		log.Printf("Failed to search posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -769,12 +809,34 @@ func SearchPosts(c *fiber.Ctx) error {
 		})
 	}
 
+	// Tạo danh sách post IDs cần lấy stats
+	var postIDs []uuid.UUID
+	for _, post := range searchPosts {
+		postIDs = append(postIDs, post.ID)
+	}
+
+	// Lấy stats cho tất cả post trong một truy vấn
+	stats := services.GetPostStats(email, postIDs)
+	statsMap := make(map[uuid.UUID]services.PostStats)
+	for _, stat := range stats {
+		statsMap[stat.PostID] = stat
+	}
+
 	// Tạo danh sách kết quả với classed = 2
 	var resultPosts []PostWithClass
 	for _, post := range searchPosts {
+		// Lấy stats từ map (nếu không có thì mặc định 0)
+		stat, exists := statsMap[post.ID]
+		if !exists {
+			stat = services.PostStats{} // Không có interaction thì để mặc định
+		}
+
 		resultPosts = append(resultPosts, PostWithClass{
-			Post:    post,
-			Classed: 2,
+			Post:         post,
+			Classed:      2,
+			LikeCount:    stat.LikeCount,
+			CommentCount: stat.CommentCount,
+			LikeID:       stat.LikeID,
 		})
 	}
 

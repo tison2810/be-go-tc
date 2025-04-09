@@ -83,3 +83,29 @@ func GetTestcaseByPostID(postID uuid.UUID) (models.Testcase, error) {
 	}
 	return testcase, nil
 }
+
+type PostStats struct {
+	PostID       uuid.UUID  `gorm:"column:post_id"`
+	LikeCount    int64      `gorm:"column:like_count"`
+	CommentCount int64      `gorm:"column:comment_count"`
+	LikeID       *uuid.UUID `gorm:"column:like_id"` // ID của like nếu user đã like
+}
+
+func GetPostStats(userMail string, postIDs []uuid.UUID) []PostStats {
+	var stats []PostStats
+	if len(postIDs) == 0 {
+		return stats
+	}
+
+	database.DB.Db.Raw(`
+        SELECT 
+            i.post_id,
+            SUM(CASE WHEN i.type = 'Like' AND i.is_like = true THEN 1 ELSE 0 END) as like_count,
+            SUM(CASE WHEN i.type = 'Comment' THEN 1 ELSE 0 END) as comment_count,
+            MAX(CASE WHEN i.user_mail = ? AND i.type = 'Like' AND i.is_like = true THEN i.id END) as like_id
+        FROM interactions i
+        WHERE i.post_id IN (?)
+        GROUP BY i.post_id
+    `, userMail, postIDs).Scan(&stats)
+	return stats
+}

@@ -16,9 +16,9 @@ type Post struct {
 	Description         string         `json:"description" gorm:"type:text;not null"`
 	CreatedAt           time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	Trace               string         `json:"trace" gorm:"type:varchar(255)"`
-
-	Topics   []PostTopic `json:"topics" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Testcase *Testcase   `json:"testcase" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	IsDeleted           bool           `json:"is_deleted" gorm:"type:boolean;default:false"`
+	Topics              []PostTopic    `json:"topics" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Testcase            *Testcase      `json:"testcase" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 type Testcase struct {

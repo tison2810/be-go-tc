@@ -91,6 +91,7 @@ func UploadTwoFilesHandler(c *fiber.Ctx) error {
 }
 
 func RunCode(c *fiber.Ctx) error {
+
 	jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
 
 	// Lấy email từ Locals (do AuthMiddleware cung cấp)
@@ -137,6 +138,33 @@ func RunCode(c *fiber.Ctx) error {
 	}
 
 	mainCode := testcase.Code
+
+	var isSuggested bool
+	suggestedPosts, err := flaskClient.CallSuggest(studentMail)
+	if err != nil {
+		log.Printf("Failed to call Flask suggest API: %v", err)
+	} else {
+		for _, sugID := range suggestedPosts {
+			if sugID == postID.String() {
+				isSuggested = true
+				break
+			}
+		}
+	}
+
+	// Cập nhật RunPosts và RunSuggestedPosts trong user
+	var user models.User
+	if err := database.DB.Db.First(&user, "mail = ?", studentMail).Error; err != nil {
+		log.Printf("User not found: %v", err)
+	} else {
+		user.RunPosts++ // Luôn tăng RunPosts
+		if isSuggested {
+			user.RunSuggestedPosts++ // Tăng RunSuggestedPosts nếu là suggested
+		}
+		if err := database.DB.Db.Save(&user).Error; err != nil {
+			log.Printf("Failed to update user RunPosts: %v", err)
+		}
+	}
 
 	// Tạo config filename (cố định hoặc dùng post_id tùy ý)
 	configFileName := "config.txt" // Giữ cố định như trong code của bạn

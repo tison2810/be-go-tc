@@ -77,3 +77,11 @@ func DeleteComment(c *fiber.Ctx) error {
 	database.DB.Db.Delete(&comment)
 	return c.Status(fiber.StatusNoContent).Send(nil)
 }
+
+func GetCommentCount(postID uuid.UUID) int64 {
+	var commentCount int64
+	database.DB.Db.Model(&models.Interaction{}).
+		Where("post_id = ? AND type = ?", postID, "Comment").
+		Count(&commentCount)
+	return commentCount
+}

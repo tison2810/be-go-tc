@@ -16,7 +16,6 @@ func privateRoutes(app *fiber.App) {
 	private.Put("/post/:id", handlers.UpdatePost)
 	private.Delete("/delete/:id", handlers.DeletePost)
 	private.Put("/post/:id/like", handlers.LikePost)
-	private.Get("/posts/:id/like-status", handlers.GetUserLikeStatus)
 	private.Post("/posts/read", handlers.ReadPost)
 	private.Post("/posts/search", handlers.SearchPosts)
 
