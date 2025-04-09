@@ -584,6 +584,20 @@ func LikePost(c *fiber.Ctx) error {
 		})
 	}
 
+	// Kiểm tra xem user có tồn tại không
+	var user models.User
+	if err := database.DB.Db.Where("mail = ?", userMail).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "User not found",
+			})
+		}
+		log.Printf("Failed to check user existence: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to verify user: " + err.Error(),
+		})
+	}
+
 	// Dùng transaction để xử lý toggle like
 	var interaction models.Interaction
 	err = database.DB.Db.Transaction(func(tx *gorm.DB) error {
