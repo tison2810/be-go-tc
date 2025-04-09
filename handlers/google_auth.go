@@ -64,18 +64,6 @@ func GoogleAuthHandler(c *fiber.Ctx) error {
 	}
 
 	if dbUser == nil {
-		// firstName, lastName := splitName(user.Name)
-		// newUser := models.User{
-		// 	FirstName: firstName,
-		// 	LastName:  lastName,
-		// 	Mail:      user.Email,
-		// 	Role:      "student",
-		// }
-
-		// dbUser, err = services.CreateUser(database.DB.Db, newUser)
-		// if err != nil {
-		// 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
-		// }
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "User not found"})
 	}
 	if dbUser.FirstName == "" && dbUser.LastName == "" {

@@ -239,10 +239,87 @@ func GetAllPostsID(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(postsID)
 }
 
+// func GetAllPosts(c *fiber.Ctx) error {
+// 	var posts []models.Post
+// 	database.DB.Db.Preload("Testcase").Find(&posts)
+// 	return c.Status(fiber.StatusOK).JSON(posts)
+// }
+
 func GetAllPosts(c *fiber.Ctx) error {
+	// Lấy email từ Locals (để dùng trong GetPostStats)
+	email, ok := c.Locals("email").(string)
+	if !ok || email == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User email not found in context",
+		})
+	}
+
+	// Lấy tất cả bài đăng
 	var posts []models.Post
-	database.DB.Db.Preload("Testcase").Find(&posts)
-	return c.Status(fiber.StatusOK).JSON(posts)
+	if err := database.DB.Db.Preload("Testcase").Where("is_deleted = ?", false).Find(&posts).Error; err != nil {
+		log.Printf("Failed to fetch posts: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch posts",
+		})
+	}
+
+	// Lấy danh sách post IDs
+	var postIDs []uuid.UUID
+	for _, post := range posts {
+		postIDs = append(postIDs, post.ID)
+	}
+
+	// Lấy thông tin tương tác từ GetPostStats
+	stats := services.GetPostStats(email, postIDs)
+	statsMap := make(map[uuid.UUID]services.PostStats)
+	for _, stat := range stats {
+		statsMap[stat.PostID] = stat
+	}
+
+	// Lấy thông tin user để tạo Author
+	var users []models.User
+	if err := database.DB.Db.Find(&users).Error; err != nil {
+		log.Printf("Failed to fetch users: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch users",
+		})
+	}
+	userMap := make(map[string]string)
+	for _, user := range users {
+		userMap[user.Mail] = user.LastName + " " + user.FirstName
+	}
+
+	// Tạo danh sách kết quả dạng PostWithType
+	var resultPosts []PostWithType
+	for _, post := range posts {
+		stat, exists := statsMap[post.ID]
+		if !exists {
+			stat = services.PostStats{}
+		}
+
+		// Tạo Author từ userMap
+		author := userMap[post.UserMail]
+		if author == "" {
+			author = "Unknown"
+		}
+
+		// Mặc định PostType là 0 (ngẫu nhiên) vì không có ngữ cảnh cụ thể
+		postType := 0
+
+		resultPosts = append(resultPosts, PostWithType{
+			Post:     post,
+			Author:   author,
+			PostType: postType,
+			Interaction: InteractionInfo{
+				LikeCount:    stat.LikeCount,
+				CommentCount: stat.CommentCount,
+				Views:        stat.Views,
+				Runs:         stat.Runs,
+			},
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(resultPosts)
 }
 
 func GetPost(c *fiber.Ctx) error {
