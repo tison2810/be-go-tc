@@ -52,7 +52,7 @@ func UploadSingleFileToJobeHandler(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(models.FileUploadResponse{
 			Success: false,
-			Error:   "Không thể đọc file từ request",
+			Error:   err.Error(),
 		})
 	}
 
@@ -280,7 +280,7 @@ func SubmitRun(c *fiber.Ctx) error {
 	jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
 	// postIDStr := c.Query("post_id")
 	// studentMail := c.Locals("user_mail").(string)
-	postIDStr := "6ce9aea7-76a1-41d1-a92b-7faa12ecae20"
+	postIDStr := "98436fc5-954a-4648-ac0b-684bb8362fa4"
 	// postID := uuid.Parse(postIDStr)
 	// studentMail := "son.nguyenthai@hcmut.edu.vn"
 
@@ -303,9 +303,6 @@ func SubmitRun(c *fiber.Ctx) error {
 	requestData := models.SubmitRunRequest{
 		RunSpec: runSpec,
 	}
-	// fmt.Print("--------------------")
-	// fmt.Print(runSpec)
-	// fmt.Print("--------------------")
 	fmt.Print(requestData)
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {
@@ -314,6 +311,7 @@ func SubmitRun(c *fiber.Ctx) error {
 			Error:  fmt.Sprintf("Error marshaling JSON: %v", err),
 		})
 	}
+	log.Printf("Sending request to Jobe with data: %s", string(jsonData))
 
 	// Gửi request POST tới Jobe server
 	url := fmt.Sprintf("%s/runs", jobeServerURL)

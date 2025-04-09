@@ -76,3 +76,52 @@ func (fc *FlaskClient) CallTrace(postID string) (string, error) {
 	// Trả về giá trị trace
 	return response.Trace, nil
 }
+
+func (fc *FlaskClient) CallSuggest(email string) ([]string, error) {
+	req := fc.agent.Request()
+	req.Header.SetMethod(fiber.MethodPost)
+	req.SetRequestURI(fc.baseURL + "/suggest")
+	req.Header.SetContentType("application/json")
+
+	// Tạo request body
+	requestBody, err := json.Marshal(fiber.Map{
+		"student_email": email,
+		"subject":       "KTLT",
+	})
+	if err != nil {
+		log.Printf("Failed to marshal request body: %v", err)
+		return nil, err
+	}
+	req.SetBody(requestBody)
+
+	// Gửi request
+	if err := fc.agent.Parse(); err != nil {
+		log.Printf("Failed to parse request: %v", err)
+		return nil, err
+	}
+
+	// Lấy response body
+	status, body, errs := fc.agent.Bytes()
+	if len(errs) > 0 {
+		log.Printf("Failed to call Flask API: %v", errs)
+		return nil, errs[0]
+	}
+
+	// Kiểm tra status code
+	if status != fiber.StatusOK {
+		log.Printf("Flask API returned non-200 status: %d, body: %s", status, string(body))
+		return nil, fmt.Errorf("flask API returned status: %d", status)
+	}
+
+	// Parse JSON response
+	var response struct {
+		InterestLabel  string   `json:"interest_label"`
+		SuggestedPosts []string `json:"suggested_posts"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		log.Printf("Failed to parse Flask API response: %v", err)
+		return nil, err
+	}
+
+	return response.SuggestedPosts, nil
+}

@@ -127,34 +127,66 @@ func RunCode(c *fiber.Ctx) error {
 		})
 	}
 
+	// Lấy testcase từ database
+	testcase, err := services.GetTestcaseByPostID(postID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(models.SubmitRunResponse{
+			Status: http.StatusNotFound,
+			Error:  fmt.Sprintf("Error retrieving testcase: %v", err),
+		})
+	}
+
+	mainCode := testcase.Code
+
 	// Tạo config filename (cố định hoặc dùng post_id tùy ý)
 	configFileName := "config.txt" // Giữ cố định như trong code của bạn
-
+	fileName := strings.ReplaceAll(postID.String(), "-", "")
 	// Tạo RunSpec với cấu hình cứng
+	// 	runSpec := models.RunSpec{
+	// 		LanguageID: "cpp",
+	// 		SourceCode: fmt.Sprintf(`#include "hcmcampaign.h"
+
+	// using namespace std;
+
+	// void g_satc_01() {
+	//     cout << "----- Sample Testcase 01 -----" << endl;
+	//     Configuration* config = new Configuration("%s");
+	//     cout << config->str() << endl;
+	//     delete config;
+	// }
+
+	// int main(int argc, const char * argv[]) {
+	//     g_satc_01();
+	//     return 0;
+	// }`, configFileName),
+	// 		SourceFilename: "main.cpp",
+	// 		Input:          "",
+	// 		FileList: [][]interface{}{
+	// 			{fmt.Sprintf("%scpp", studentID), "hcmcampaign.cpp"}, // Dùng studentID cho file_id
+	// 			{fmt.Sprintf("%sh", studentID), "hcmcampaign.h"},     // Dùng studentID cho file_id
+	// 			{"systemmainh", "main.h"},
+	// 			{"configtxt", configFileName}, // File config cố định
+	// 		},
+	// 		Parameters: map[string]interface{}{
+	// 			"max_execution_time": 5,
+	// 			"max_memory_usage":   1000000,
+	// 			"compileargs":        []string{"-I .", "-std=c++11"},
+	// 			"linkargs":           []string{"hcmcampaign.cpp"},
+	// 			"args":               []string{configFileName},
+	// 		},
+	// 		Debug: true,
+	// 	}
+
 	runSpec := models.RunSpec{
-		LanguageID: "cpp",
-		SourceCode: fmt.Sprintf(`#include "hcmcampaign.h"
-
-using namespace std;
-
-void g_satc_01() {
-    cout << "----- Sample Testcase 01 -----" << endl;
-    Configuration* config = new Configuration("%s");
-    cout << config->str() << endl;
-    delete config;
-}
-
-int main(int argc, const char * argv[]) {
-    g_satc_01();
-    return 0;
-}`, configFileName),
+		LanguageID:     "cpp",
+		SourceCode:     mainCode,
 		SourceFilename: "main.cpp",
 		Input:          "",
 		FileList: [][]interface{}{
 			{fmt.Sprintf("%scpp", studentID), "hcmcampaign.cpp"}, // Dùng studentID cho file_id
 			{fmt.Sprintf("%sh", studentID), "hcmcampaign.h"},     // Dùng studentID cho file_id
 			{"systemmainh", "main.h"},
-			{"configtxt", configFileName}, // File config cố định
+			{fileName, configFileName}, // File config cố định
 		},
 		Parameters: map[string]interface{}{
 			"max_execution_time": 5,
@@ -166,7 +198,6 @@ int main(int argc, const char * argv[]) {
 		Debug: true,
 	}
 
-	// Tạo SubmitRunRequest
 	requestData := models.SubmitRunRequest{
 		RunSpec: runSpec,
 	}
@@ -181,10 +212,8 @@ int main(int argc, const char * argv[]) {
 		})
 	}
 
-	// Log request data để debug
 	log.Printf("Sending request to Jobe with data: %s", string(jsonData))
 
-	// Gửi request POST tới Jobe server
 	url := fmt.Sprintf("%s/runs", jobeServerURL)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {

@@ -75,3 +75,11 @@ func (s *PostService) CheckRunResult(
 
 	return &studentRun, nil
 }
+
+func GetTestcaseByPostID(postID uuid.UUID) (models.Testcase, error) {
+	var testcase models.Testcase
+	if err := database.DB.Db.Where("post_id = ?", postID).First(&testcase).Error; err != nil {
+		return models.Testcase{}, err
+	}
+	return testcase, nil
+}

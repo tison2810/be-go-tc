@@ -1,0 +1,17 @@
+basePath: /
+host: localhost:3000
+info:
+  contact:
+    name: Your Name
+  description: API using Fiber + Swagger
+  title: My API
+  version: "1.0"
+paths: {}
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

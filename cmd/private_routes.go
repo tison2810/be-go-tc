@@ -9,12 +9,18 @@ import (
 func privateRoutes(app *fiber.App) {
 	private := app.Group("/", middleware.AuthMiddleware())
 	private.Post("/create", handlers.CreatePost)
+	private.Post("/createform", handlers.CreatePostFormData)
 	private.Get("/posts", handlers.GetAllPosts)
 	private.Get("/postsID", handlers.GetAllPostsID)
 	private.Get("/post/:id", handlers.GetPost)
 	private.Put("/post/:id", handlers.UpdatePost)
 	private.Delete("/delete/:id", handlers.DeletePost)
+	private.Put("/post/:id/like", handlers.LikePost)
 	private.Get("/posts/:id/like-status", handlers.GetUserLikeStatus)
+	private.Post("/posts/read", handlers.ReadPost)
+	private.Post("/posts/search", handlers.SearchPosts)
+
+	private.Get("/sgposts", handlers.GetPostForStudent)
 
 	private.Post("/comment", handlers.CreateComment)
 	private.Get("/post/:id/comments", handlers.GetPostComment)

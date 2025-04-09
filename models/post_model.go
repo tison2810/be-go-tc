@@ -23,8 +23,9 @@ type Post struct {
 
 type Testcase struct {
 	PostID   uuid.UUID `json:"post_id" gorm:"type:uuid;primaryKey"`
-	Input    string    `json:"input" gorm:"type:varchar(100);not null"`
-	Expected string    `json:"expected" gorm:"type:varchar(100);not null"`
+	Input    string    `json:"input" gorm:"type:text;not null"`
+	Expected string    `json:"expected" gorm:"type:text;not null"`
+	Code     string    `json:"code" gorm:"type:text;not null"`
 
 	Post *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
