@@ -84,18 +84,8 @@ func GetTestcaseByPostID(postID uuid.UUID) (models.Testcase, error) {
 	return testcase, nil
 }
 
-type PostStats struct {
-	PostID              uuid.UUID  `gorm:"column:post_id"`
-	LikeCount           int64      `gorm:"column:like_count"`
-	CommentCount        int64      `gorm:"column:comment_count"`
-	LikeID              *uuid.UUID `gorm:"column:like_id"`
-	VerifiedTeacherMail *string    `gorm:"column:verified_teacher_mail"`
-	Views               int        `gorm:"column:views"`
-	Runs                int        `gorm:"column:runs"`
-}
-
-func GetPostStats(userMail string, postIDs []uuid.UUID) []PostStats {
-	var stats []PostStats
+func GetPostStats(userMail string, postIDs []uuid.UUID) []models.PostStats {
+	var stats []models.PostStats
 	if len(postIDs) == 0 {
 		return stats
 	}

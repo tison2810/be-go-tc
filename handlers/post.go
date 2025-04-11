@@ -239,11 +239,17 @@ func GetAllPostsID(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(postsID)
 }
 
-// func GetAllPosts(c *fiber.Ctx) error {
-// 	var posts []models.Post
-// 	database.DB.Db.Preload("Testcase").Find(&posts)
-// 	return c.Status(fiber.StatusOK).JSON(posts)
-// }
+//	func GetAllPosts(c *fiber.Ctx) error {
+//		var posts []models.Post
+//		database.DB.Db.Preload("Testcase").Find(&posts)
+//		return c.Status(fiber.StatusOK).JSON(posts)
+//	}
+type PostWithType struct {
+	models.Post
+	Author      string                 `json:"author"`      // Tên tác giả
+	PostType    int                    `json:"post_type"`   // 1: gợi ý, 0: ngẫu nhiên, 2: tìm kiếm
+	Interaction models.InteractionInfo `json:"interaction"` // Trường interaction mới
+}
 
 func GetAllPosts(c *fiber.Ctx) error {
 	// Lấy email từ Locals (để dùng trong GetPostStats)
@@ -271,7 +277,7 @@ func GetAllPosts(c *fiber.Ctx) error {
 
 	// Lấy thông tin tương tác từ GetPostStats
 	stats := services.GetPostStats(email, postIDs)
-	statsMap := make(map[uuid.UUID]services.PostStats)
+	statsMap := make(map[uuid.UUID]models.PostStats)
 	for _, stat := range stats {
 		statsMap[stat.PostID] = stat
 	}
@@ -294,7 +300,7 @@ func GetAllPosts(c *fiber.Ctx) error {
 	for _, post := range posts {
 		stat, exists := statsMap[post.ID]
 		if !exists {
-			stat = services.PostStats{}
+			stat = models.PostStats{}
 		}
 
 		// Tạo Author từ userMap
@@ -310,11 +316,13 @@ func GetAllPosts(c *fiber.Ctx) error {
 			Post:     post,
 			Author:   author,
 			PostType: postType,
-			Interaction: InteractionInfo{
-				LikeCount:    stat.LikeCount,
-				CommentCount: stat.CommentCount,
-				Views:        stat.Views,
-				Runs:         stat.Runs,
+			Interaction: models.InteractionInfo{
+				LikeCount:           stat.LikeCount,
+				CommentCount:        stat.CommentCount,
+				LikeID:              stat.LikeID,
+				VerifiedTeacherMail: stat.VerifiedTeacherMail,
+				Views:               stat.Views, // Lấy từ models.PostStats
+				Runs:                stat.Runs,  // Lấy từ models.PostStats
 			},
 		})
 	}
@@ -386,9 +394,9 @@ func GetPost(c *fiber.Ctx) error {
 	// Mặc định PostType = 0 (random) nếu không phải gợi ý
 	// PostType = 2 (search) không áp dụng trong GetPost trừ khi có thêm ngữ cảnh
 
-	// Lấy PostStats
+	// Lấy models.PostStats
 	stats := services.GetPostStats(email, []uuid.UUID{postID})
-	var stat services.PostStats
+	var stat models.PostStats
 	if len(stats) > 0 {
 		stat = stats[0]
 	}
@@ -398,11 +406,13 @@ func GetPost(c *fiber.Ctx) error {
 		Post:     post,
 		Author:   author,
 		PostType: postType,
-		Interaction: InteractionInfo{
-			LikeCount:    stat.LikeCount,
-			CommentCount: stat.CommentCount,
-			Views:        stat.Views,
-			Runs:         stat.Runs,
+		Interaction: models.InteractionInfo{
+			LikeCount:           stat.LikeCount,
+			CommentCount:        stat.CommentCount,
+			LikeID:              stat.LikeID,
+			VerifiedTeacherMail: stat.VerifiedTeacherMail,
+			Views:               stat.Views, // Lấy từ PostStats
+			Runs:                stat.Runs,  // Lấy từ PostStats
 		},
 	}
 
@@ -548,16 +558,57 @@ func UpdatePostFormData(c *fiber.Ctx) error {
 }
 
 func DeletePost(c *fiber.Ctx) error {
-	id := c.Params("id")
-	post := new(models.Post)
-	database.DB.Db.Where("id = ?", id).First(&post)
-	if post.ID == uuid.Nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Post not found",
+	// Lấy email từ Locals (do AuthMiddleware cung cấp)
+	userMail, ok := c.Locals("email").(string)
+	if !ok || userMail == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User email not found in context",
 		})
 	}
 
-	database.DB.Db.Update("is_deleted", true).Where("id = ?", id).First(&post)
+	// Lấy post_id từ params
+	id := c.Params("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Post ID is required",
+		})
+	}
+	postID, err := uuid.Parse(id)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid post ID",
+		})
+	}
+
+	// Tìm bài post
+	var post models.Post
+	if err := database.DB.Db.Where("id = ? AND is_deleted = ?", postID, false).First(&post).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Post not found or already deleted",
+			})
+		}
+		log.Printf("Failed to fetch post: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch post",
+		})
+	}
+
+	// Kiểm tra quyền xóa
+	if post.UserMail != userMail {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "You are not authorized to delete this post",
+		})
+	}
+
+	// Cập nhật is_deleted thành true
+	if err := database.DB.Db.Model(&post).Update("is_deleted", true).Error; err != nil {
+		log.Printf("Failed to delete post: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to delete post",
+		})
+	}
+
 	return c.Status(fiber.StatusNoContent).Send(nil)
 }
 
@@ -640,21 +691,6 @@ func GetLikeCount(postID uuid.UUID) int64 {
 	return likeCount
 }
 
-type InteractionInfo struct {
-	LikeCount           int64      `json:"like_count"`    // Số lượt like
-	CommentCount        int64      `json:"comment_count"` // Số lượt comment
-	LikeID              *uuid.UUID `json:"like_id"`       // ID của like nếu user đã like, null nếu chưa
-	VerifiedTeacherMail *string    `json:"verified_teacher_mail"`
-	Views               int        `json:"view_count"` // Số lượt xem
-	Runs                int        `json:"run_count"`  // Số lượt chạy
-}
-type PostWithType struct {
-	models.Post
-	Author      string          `json:"author"`      // Tên tác giả
-	PostType    int             `json:"post_type"`   // 1: gợi ý, 0: ngẫu nhiên, 2: tìm kiếm
-	Interaction InteractionInfo `json:"interaction"` // Trường interaction mới
-}
-
 func GetPostForStudent(c *fiber.Ctx) error {
 	email, ok := c.Locals("email").(string)
 	if !ok || email == "" {
@@ -730,7 +766,7 @@ func GetPostForStudent(c *fiber.Ctx) error {
 	}
 
 	stats := services.GetPostStats(email, postIDs)
-	statsMap := make(map[uuid.UUID]services.PostStats)
+	statsMap := make(map[uuid.UUID]models.PostStats)
 	for _, stat := range stats {
 		statsMap[stat.PostID] = stat
 	}
@@ -774,7 +810,7 @@ func GetPostForStudent(c *fiber.Ctx) error {
 
 		stat, exists := statsMap[post.ID]
 		if !exists {
-			stat = services.PostStats{}
+			stat = models.PostStats{}
 		}
 		author := userMap[post.UserMail]
 		if author == "" {
@@ -785,7 +821,7 @@ func GetPostForStudent(c *fiber.Ctx) error {
 			Post:     post,
 			Author:   author,
 			PostType: postType,
-			Interaction: InteractionInfo{
+			Interaction: models.InteractionInfo{
 				LikeCount:           stat.LikeCount,
 				CommentCount:        stat.CommentCount,
 				LikeID:              stat.LikeID,
@@ -967,7 +1003,7 @@ func SearchPosts(c *fiber.Ctx) error {
 	}
 
 	stats := services.GetPostStats(email, postIDs)
-	statsMap := make(map[uuid.UUID]services.PostStats)
+	statsMap := make(map[uuid.UUID]models.PostStats)
 	for _, stat := range stats {
 		statsMap[stat.PostID] = stat
 	}
@@ -987,7 +1023,7 @@ func SearchPosts(c *fiber.Ctx) error {
 	for _, post := range searchPosts {
 		stat, exists := statsMap[post.ID]
 		if !exists {
-			stat = services.PostStats{}
+			stat = models.PostStats{}
 		}
 		author := userMap[post.UserMail]
 		if author == "" {
@@ -998,7 +1034,7 @@ func SearchPosts(c *fiber.Ctx) error {
 			Post:     post,
 			Author:   author,
 			PostType: 2, // Tìm kiếm
-			Interaction: InteractionInfo{
+			Interaction: models.InteractionInfo{
 				LikeCount:           stat.LikeCount,
 				CommentCount:        stat.CommentCount,
 				LikeID:              stat.LikeID,

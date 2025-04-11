@@ -8,7 +8,7 @@ import (
 
 type Post struct {
 	ID             uuid.UUID    `json:"id" gorm:"type:uuid;primaryKey"`
-	UserMail       string       `json:"-" gorm:"type:varchar(100);not null"`
+	UserMail       string       `json:"mail" gorm:"type:varchar(100);not null"`
 	Subject        string       `json:"subject" gorm:"type:varchar(255);not null"`
 	Title          string       `json:"title" gorm:"type:varchar(255);not null"`
 	Description    string       `json:"description" gorm:"type:text;not null"`
@@ -88,4 +88,23 @@ type PostInteraction struct {
 
 	Post *Post `json:"-" gorm:"foreignKey:PostID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	User *User `json:"-" gorm:"foreignKey:UserMail;references:Mail;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+type InteractionInfo struct {
+	LikeCount           int64      `json:"like_count"`    // Số lượt like
+	CommentCount        int64      `json:"comment_count"` // Số lượt comment
+	LikeID              *uuid.UUID `json:"like_id"`       // ID của like nếu user đã like, null nếu chưa
+	VerifiedTeacherMail *string    `json:"verified_teacher_mail"`
+	Views               int        `json:"view_count"` // Số lượt xem
+	Runs                int        `json:"run_count"`  // Số lượt chạy
+}
+
+type PostStats struct {
+	PostID              uuid.UUID  `gorm:"column:post_id"`
+	LikeCount           int64      `gorm:"column:like_count"`
+	CommentCount        int64      `gorm:"column:comment_count"`
+	LikeID              *uuid.UUID `gorm:"column:like_id"`
+	VerifiedTeacherMail *string    `gorm:"column:verified_teacher_mail"`
+	Views               int        `gorm:"column:views"`
+	Runs                int        `gorm:"column:runs"`
 }

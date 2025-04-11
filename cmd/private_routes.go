@@ -38,6 +38,11 @@ func privateRoutes(app *fiber.App) {
 	private.Post("/upload", handlers.UploadTwoFilesHandler)
 	private.Get("/runcode/:id", handlers.RunCode)
 
+	private.Get("/user/posts", handlers.GetUserPosts)
+	private.Get("/user/likedposts", handlers.GetLikedPosts)
+	private.Get("/user/commentposts/:id", handlers.GetPostComment)
+	private.Get("/user/comments", handlers.GetUserComments)
+
 	// private.Post("/interactions", handlers.CreateInteraction)
 	// private.Get("/interactions", handlers.GetAllInteractions)
 	// private.Get("/interactions/:id", handlers.GetInteraction)
