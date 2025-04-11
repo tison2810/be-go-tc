@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/swagger"
 	_ "github.com/tison2810/be-go-tc/cmd/docs"
 	"github.com/tison2810/be-go-tc/database"
 	"github.com/tison2810/be-go-tc/middleware"
@@ -24,7 +23,7 @@ func main() {
 	app := fiber.New()
 	middleware.FiberMiddleware(app)
 	publicRoutes(app)
-	app.Get("/swagger/*", swagger.HandlerDefault)
+	// app.Get("/swagger/*", swagger.HandlerDefault)
 	privateRoutes(app)
 	app.Listen(":3000")
 }

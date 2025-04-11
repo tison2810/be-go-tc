@@ -14,11 +14,12 @@ import (
 func FiberMiddleware(a *fiber.App) {
 	a.Use(
 		cors.New(cors.Config{
-			AllowOrigins:     "http://localhost:3001",
+			AllowOrigins:     "http://localhost",
 			AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-			AllowHeaders:     "Origin, Content-Type, Accept, Authorization, Access-Control-Allow-Origin",
-			AllowCredentials: true,
-		})
+			AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+			AllowCredentials: false,
+		}),
+		logger.New(),
 	)
 }
 
