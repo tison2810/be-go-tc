@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -13,9 +14,17 @@ import (
 // See: https://docs.gofiber.io/api/middleware
 func FiberMiddleware(a *fiber.App) {
 	a.Use(
-		// Add CORS to each route.
-		cors.New(),
-		// Add simple logger.
+		cors.New(cors.Config{
+			AllowOrigins:     "http://localhost:3001",
+			AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+			AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+			AllowCredentials: true,
+		}),
+		func(c *fiber.Ctx) error {
+			log.Printf("Request Method: %s, Path: %s", c.Method(), c.Path())
+			log.Printf("Response Headers: %v", c.Response().Header)
+			return c.Next()
+		},
 		logger.New(),
 	)
 }

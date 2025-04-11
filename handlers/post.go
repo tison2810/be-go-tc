@@ -1011,3 +1011,82 @@ func SearchPosts(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(resultPosts)
 }
+
+func CheckFileExist(c *fiber.Ctx) error {
+	email := c.Locals("email").(string)
+	if email == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User email not found in context",
+		})
+	}
+
+	student := new(models.User)
+	if err := database.DB.Db.Where("mail = ?", email).First(student).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Student not found",
+			})
+		}
+		log.Printf("Failed to fetch student: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch student",
+		})
+	}
+
+	hFile := student.Maso + "h"
+	cppFile := student.Maso + "cpp"
+
+	jobeBaseURL := "http://jobe:80/jobe/index.php/restapi/files/"
+
+	// Hàm helper để kiểm tra file trên Jobe
+	checkFileOnJobe := func(fileID string) (int, string, error) {
+		url := fmt.Sprintf("%s%s", jobeBaseURL, fileID)
+		resp, err := http.Head(url)
+		if err != nil {
+			log.Printf("Error connecting to Jobe Server for file %s: %v", fileID, err)
+			return fiber.StatusInternalServerError, "Cannot connect to Jobe Server", err
+		}
+		defer resp.Body.Close()
+
+		switch resp.StatusCode {
+		case http.StatusNoContent: // 204
+			return fiber.StatusNoContent, "File exists in Jobe cache", nil
+		case http.StatusBadRequest: // 400
+			return fiber.StatusBadRequest, "Missing fileID in url", nil
+		case http.StatusNotFound: // 404
+			return fiber.StatusNotFound, "File not found in Jobe cache", nil
+		default:
+			return fiber.StatusBadGateway, fmt.Sprintf("Unexpected response code from Jobe: %d", resp.StatusCode), nil
+		}
+	}
+
+	// Kiểm tra file .h
+	hStatus, hMessage, hErr := checkFileOnJobe(hFile)
+	if hErr != nil {
+		return c.Status(hStatus).SendString(hMessage)
+	}
+
+	// Kiểm tra file .cpp
+	cppStatus, cppMessage, cppErr := checkFileOnJobe(cppFile)
+	if cppErr != nil {
+		return c.Status(cppStatus).SendString(cppMessage)
+	}
+
+	// Xử lý kết quả
+	if hStatus == fiber.StatusNoContent && cppStatus == fiber.StatusNoContent {
+		return c.Status(fiber.StatusNoContent).SendString("Both files exist in Jobe cache")
+	} else if hStatus == fiber.StatusNotFound && cppStatus == fiber.StatusNotFound {
+		return c.Status(fiber.StatusNotFound).SendString("Both files not found in Jobe cache")
+	} else {
+		return c.Status(fiber.StatusPartialContent).JSON(fiber.Map{
+			"h_file": map[string]interface{}{
+				"status":  hStatus,
+				"message": hMessage,
+			},
+			"cpp_file": map[string]interface{}{
+				"status":  cppStatus,
+				"message": cppMessage,
+			},
+		})
+	}
+}

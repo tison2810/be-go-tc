@@ -19,7 +19,7 @@ func privateRoutes(app *fiber.App) {
 	private.Put("/post/:id/like", handlers.LikePost)
 	private.Post("/posts/read", handlers.ReadPost)
 	private.Post("/posts/search", handlers.SearchPosts)
-
+	private.Get("/checkfile", handlers.CheckFileExist)
 	private.Get("/sgposts", handlers.GetPostForStudent)
 	private.Post("/verify/:id", handlers.VerifyPost)
 

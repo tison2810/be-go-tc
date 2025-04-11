@@ -380,7 +380,7 @@ func RunCode(c *fiber.Ctx) error {
 	case http.StatusNotFound: // 404: Not found
 		return c.Status(fiber.StatusNotFound).JSON(models.SubmitRunResponse{
 			Status: http.StatusNotFound,
-			Error:  "Jobe server endpoint not found",
+			Error:  "Missing file",
 		})
 	default:
 		return c.Status(fiber.StatusInternalServerError).JSON(models.SubmitRunResponse{
