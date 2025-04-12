@@ -88,7 +88,7 @@ func UploadTwoFilesHandler(c *fiber.Ctx) error {
 	}
 
 	// Reset response
-	c.Response().Reset()
+	// c.Response().Reset()
 
 	c.Locals("form_file_key", "h_file")
 	c.Locals("file_id", hFileID)
