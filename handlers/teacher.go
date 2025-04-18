@@ -52,7 +52,7 @@ func VerifyPost(c *fiber.Ctx) error {
 	err = database.DB.Db.Transaction(func(tx *gorm.DB) error {
 		// Kiểm tra post tồn tại và chưa bị xóa
 		var post models.Post
-		if err := tx.First(&post, "id = ? AND is_deleted = ?", postID, false).Error; err != nil {
+		if err := tx.First(&post, "id = ? AND post_status IN (?)", postID, []string{"active", "similar"}).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 					"error": "Post not found or has been deleted",

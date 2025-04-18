@@ -8,16 +8,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtKey = []byte("super-secret-key") // Nên lưu trong biến môi trường thay vì hardcode
+// var jwtKey = []byte(os.Getenv("JWT_SECRET"))
+var jwtKey = []byte("super-secret-key")
 
 // GenerateJWT tạo JWT với email và thời gian sống 24 giờ
 func GenerateJWT(email string, role string) (string, error) {
 	claims := &jwt.MapClaims{
 		"email": email,
 		"role":  role,
-		"exp":   time.Now().Add(24 * time.Hour).Unix(),
-		"iat":   time.Now().Unix(), // Thêm thời điểm phát hành
-		"iss":   "my-app",          // Thêm issuer (tùy chỉnh)
+		"exp":   time.Now().Add(1 * time.Hour).Unix(),
+		"iat":   time.Now().Unix(),
+		"iss":   "login",
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)

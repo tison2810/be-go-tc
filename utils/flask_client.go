@@ -125,3 +125,93 @@ func (fc *FlaskClient) CallSuggest(email string) ([]string, error) {
 
 	return response.SuggestedPosts, nil
 }
+
+type SimilarPost struct {
+	PostID      string  `json:"post_id"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Author      string  `json:"author"`
+	Input       string  `json:"input"`
+	Expected    string  `json:"expected"`
+	Similarity  float64 `json:"similarity"`
+}
+
+func (fc *FlaskClient) CallSimilarPost(postID string) ([]SimilarPost, error) {
+	req := fc.agent.Request()
+	req.Header.SetMethod(fiber.MethodPost)
+	req.SetRequestURI(fc.baseURL + "/similar_post")
+	req.Header.SetContentType("application/json")
+
+	requestBody, err := json.Marshal(fiber.Map{
+		"post_id": postID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	req.SetBody(requestBody)
+
+	if err := fc.agent.Parse(); err != nil {
+		return nil, err
+	}
+
+	status, body, errs := fc.agent.Bytes()
+	if len(errs) > 0 {
+		return nil, errs[0]
+	}
+
+	if status == fiber.StatusNotFound {
+		return nil, nil // Không tìm thấy bài viết tương tự
+	}
+	if status != fiber.StatusOK {
+		return nil, fmt.Errorf("flask API returned status: %d", status)
+	}
+
+	var response struct {
+		SimilarPosts []SimilarPost `json:"similar_posts"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	log.Printf("Similar posts: %v", response.SimilarPosts)
+	return response.SimilarPosts, nil
+}
+
+func (fc *FlaskClient) CallRelatedPost(postID string) ([]SimilarPost, error) {
+	req := fc.agent.Request()
+	req.Header.SetMethod(fiber.MethodPost)
+	req.SetRequestURI(fc.baseURL + "/related_post")
+	req.Header.SetContentType("application/json")
+
+	requestBody, err := json.Marshal(fiber.Map{
+		"post_id": postID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	req.SetBody(requestBody)
+
+	if err := fc.agent.Parse(); err != nil {
+		return nil, err
+	}
+
+	status, body, errs := fc.agent.Bytes()
+	if len(errs) > 0 {
+		return nil, errs[0]
+	}
+
+	if status == fiber.StatusNotFound {
+		return nil, nil // Không tìm thấy bài viết tương tự
+	}
+	if status != fiber.StatusOK {
+		return nil, fmt.Errorf("flask API returned status: %d", status)
+	}
+
+	var response struct {
+		RelatedPosts []SimilarPost `json:"related_posts"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	log.Printf("Related posts: %v", response.RelatedPosts)
+	return response.RelatedPosts, nil
+}

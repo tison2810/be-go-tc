@@ -173,7 +173,7 @@ func RunCode(c *fiber.Ctx) error {
 	err = database.DB.Db.Transaction(func(tx *gorm.DB) error {
 		// Tăng Runs trong Post
 		var post models.Post
-		if err := tx.First(&post, "id = ? AND is_deleted = ?", postID, false).Error; err != nil {
+		if err := tx.First(&post, "id = ? AND post_status IN (?)", postID, []string{"active", "similar"}).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(models.SubmitRunResponse{
 				Status: http.StatusNotFound,
 				Error:  "Post not found or has been deleted",

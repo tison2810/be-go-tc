@@ -1,14 +1,10 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand/v2"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -26,208 +22,159 @@ func init() {
 	flaskClient = utils.NewFlaskClient()
 }
 
-// @Summary Create a new post
-// @Tags Post
-// @Accept json
-// @Produce json
-// @Param post body models.Post true "Post content"
-// @Success 201 {object} models.Post
-// @Security BearerAuth
-// @Router /create [post]
-
 func CreatePost(c *fiber.Ctx) error {
-	post := new(models.Post)
-
-	if err := c.BodyParser(post); err != nil {
+	post, err := services.CreatePostFormData(c)
+	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse JSON: " + err.Error(),
-		})
-	}
-	post.UserMail, _ = c.Locals("email").(string)
-	if post.UserMail == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "User email not found in context",
-		})
-	}
-	post.ID = uuid.New()
-	post.LastModified = time.Now()
-	post.Subject = "KTLT"
-
-	if post.Testcase != nil {
-		post.Testcase.PostID = post.ID
-	}
-
-	if err := database.DB.Db.Create(&post).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to save post and testcase: " + err.Error(),
+			"error": err.Error(),
 		})
 	}
 
-	if post.Testcase != nil && post.Testcase.Input != "" {
-		go func() {
-			// Tạo tên file từ UUID không dấu gạch nối
-			fileName := strings.ReplaceAll(post.ID.String(), "-", "") // Ví dụ: 6ce9aea776a141d1a92b7faa12ecae20.txt
-			fileContents := []byte(post.Testcase.Input)               // Nội dung file từ Testcase.Input
-
-			// Mã hóa base64
-			base64Contents := base64.StdEncoding.EncodeToString(fileContents)
-
-			// Tạo request data
-			requestData := models.UploadFileRequest{
-				FileContents: base64Contents,
-			}
-			jsonData, err := json.Marshal(requestData)
-			if err != nil {
-				log.Printf("Failed to marshal JSON for Jobe: %v", err)
-				return
-			}
-
-			// Gửi request tới Jobe server
-			jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
-			url := fmt.Sprintf("%s/files/%s", jobeServerURL, fileName)
-			log.Printf("Sending request to Jobe: %s", url)
-
-			req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
-			if err != nil {
-				log.Printf("Failed to create Jobe request: %v", err)
-				return
-			}
-
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Accept", "application/json")
-
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Printf("Failed to send request to Jobe: %v", err)
-				return
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusNoContent {
-				log.Printf("Jobe returned unexpected status: %d", resp.StatusCode)
-			}
-		}()
+	similarPosts, err := flaskClient.CallSimilarPost(post.ID.String())
+	if err != nil {
+		log.Printf("Failed to call Flask similar post API: %v", err)
+		return c.Status(fiber.StatusCreated).JSON(post)
 	}
 
-	go func() {
-		trace, err := flaskClient.CallTrace(post.ID.String())
-		if err != nil {
-			log.Printf("Failed to call Flask trace API: %v", err)
-			return
+	if len(similarPosts) > 0 {
+		if err := database.DB.Db.Model(&models.Post{}).Where("id = ?", post.ID).UpdateColumn("post_status", "similar_hidden").Error; err != nil {
+			log.Printf("Failed to delete post when duplicate: %v", err)
 		}
-		post.Trace = trace
-		// fmt.Print(post.Trace)
-	}()
-	return c.Status(fiber.StatusCreated).JSON(post)
+		return c.Status(fiber.StatusFound).JSON(fiber.Map{
+			"post":          post,
+			"similar_posts": similarPosts,
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"post": post,
+	})
 }
 
-func CreatePostFormData(c *fiber.Ctx) error {
-	post := new(models.Post)
-
-	// Lấy email từ context (giữ nguyên)
-	post.UserMail, _ = c.Locals("email").(string)
-	if post.UserMail == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "User email not found in context",
-		})
-	}
-
-	// Lấy dữ liệu từ form-data
-	post.Title = c.FormValue("title")
-	post.Description = c.FormValue("description")
-	post.Subject = "KTLT" // Hardcode như hiện tại
-
-	// Tạo Testcase từ form-data
-	testcase := new(models.Testcase)
-	testcase.Input = c.FormValue("input")
-	testcase.Expected = c.FormValue("expected")
-	testcase.Code = c.FormValue("code")
-	if testcase.Input != "" || testcase.Expected != "" || testcase.Code != "" {
-		post.Testcase = testcase
-	}
-
-	// Tạo UUID cho post
-	post.ID = uuid.New()
-	post.LastModified = time.Now()
-
-	if post.Testcase != nil {
-		post.Testcase.PostID = post.ID
-	}
-
-	// Lưu post vào database
-	if err := database.DB.Db.Create(&post).Error; err != nil {
+func PostAnyway(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if err := database.DB.Db.Model(&models.Post{}).Where("id = ?", id).UpdateColumn("post_status", "similar").Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to save post and testcase: " + err.Error(),
+			"error": "Failed to update post status",
 		})
 	}
-
-	// Gửi Testcase.Input tới Jobe (nếu có)
-	if post.Testcase != nil && post.Testcase.Input != "" {
-		go func() {
-			// Tạo tên file từ UUID không dấu gạch nối
-			fileName := strings.ReplaceAll(post.ID.String(), "-", "")
-			fileContents := []byte(post.Testcase.Input)
-
-			// Mã hóa base64
-			base64Contents := base64.StdEncoding.EncodeToString(fileContents)
-
-			// Tạo request data
-			requestData := models.UploadFileRequest{
-				FileContents: base64Contents,
-			}
-			jsonData, err := json.Marshal(requestData)
-			if err != nil {
-				log.Printf("Failed to marshal JSON for Jobe: %v", err)
-				return
-			}
-
-			// Gửi request tới Jobe server
-			jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
-			url := fmt.Sprintf("%s/files/%s", jobeServerURL, fileName)
-			log.Printf("Sending request to Jobe: %s", url)
-
-			req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
-			if err != nil {
-				log.Printf("Failed to create Jobe request: %v", err)
-				return
-			}
-
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Accept", "application/json")
-
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Printf("Failed to send request to Jobe: %v", err)
-				return
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusNoContent {
-				log.Printf("Jobe returned unexpected status: %d", resp.StatusCode)
-			}
-		}()
-	}
-
-	// Gọi Flask API để lấy trace
-	go func() {
-		trace, err := flaskClient.CallTrace(post.ID.String())
-		if err != nil {
-			log.Printf("Failed to call Flask trace API: %v", err)
-			return
-		}
-		post.Trace = trace
-		if err := database.DB.Db.Save(&post).Error; err != nil {
-			log.Printf("Failed to update post trace: %v", err)
-			return
-		}
-		// fmt.Print(post.Trace)
-	}()
-
-	// Trả về JSON
-	return c.Status(fiber.StatusCreated).JSON(post)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Post status updated to similar",
+	})
 }
+
+func GetRelatedPosts(c *fiber.Ctx) error {
+	id := c.Params("id")
+	related_posts, err := flaskClient.CallRelatedPost(id)
+	if err != nil {
+		log.Printf("Failed to call Flask related post API: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch related posts",
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"related_posts": related_posts,
+	})
+}
+
+// func CreatePostFormData(c *fiber.Ctx) error {
+// 	post := new(models.Post)
+
+// 	// Lấy email từ context (giữ nguyên)
+// 	post.UserMail, _ = c.Locals("email").(string)
+// 	if post.UserMail == "" {
+// 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+// 			"error": "User email not found in context",
+// 		})
+// 	}
+
+// 	post.Title = c.FormValue("title")
+// 	post.Description = c.FormValue("description")
+// 	post.Subject = "KTLT"
+
+// 	testcase := new(models.Testcase)
+// 	testcase.Input = c.FormValue("input")
+// 	testcase.Expected = c.FormValue("expected")
+// 	testcase.Code = c.FormValue("code")
+// 	if testcase.Input != "" || testcase.Expected != "" || testcase.Code != "" {
+// 		post.Testcase = testcase
+// 	}
+
+// 	post.ID = uuid.New()
+// 	post.LastModified = time.Now()
+
+// 	if post.Testcase != nil {
+// 		post.Testcase.PostID = post.ID
+// 	}
+
+// 	if err := database.DB.Db.Create(&post).Error; err != nil {
+// 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+// 			"error": "Failed to save post and testcase: " + err.Error(),
+// 		})
+// 	}
+
+// 	if post.Testcase != nil && post.Testcase.Input != "" {
+// 		go func() {
+// 			// Tạo tên file từ UUID không dấu gạch nối
+// 			fileName := strings.ReplaceAll(post.ID.String(), "-", "")
+// 			fileContents := []byte(post.Testcase.Input)
+
+// 			// Mã hóa base64
+// 			base64Contents := base64.StdEncoding.EncodeToString(fileContents)
+
+// 			// Tạo request data
+// 			requestData := models.UploadFileRequest{
+// 				FileContents: base64Contents,
+// 			}
+// 			jsonData, err := json.Marshal(requestData)
+// 			if err != nil {
+// 				log.Printf("Failed to marshal JSON for Jobe: %v", err)
+// 				return
+// 			}
+
+// 			// Gửi request tới Jobe server
+// 			jobeServerURL := "http://jobe:80/jobe/index.php/restapi"
+// 			url := fmt.Sprintf("%s/files/%s", jobeServerURL, fileName)
+// 			log.Printf("Sending request to Jobe: %s", url)
+
+// 			req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonData))
+// 			if err != nil {
+// 				log.Printf("Failed to create Jobe request: %v", err)
+// 				return
+// 			}
+
+// 			req.Header.Set("Content-Type", "application/json")
+// 			req.Header.Set("Accept", "application/json")
+
+// 			client := &http.Client{}
+// 			resp, err := client.Do(req)
+// 			if err != nil {
+// 				log.Printf("Failed to send request to Jobe: %v", err)
+// 				return
+// 			}
+// 			defer resp.Body.Close()
+
+// 			if resp.StatusCode != http.StatusNoContent {
+// 				log.Printf("Jobe returned unexpected status: %d", resp.StatusCode)
+// 			}
+// 		}()
+// 	}
+
+// 	go func() {
+// 		trace, err := flaskClient.CallTrace(post.ID.String())
+// 		if err != nil {
+// 			log.Printf("Failed to call Flask trace API: %v", err)
+// 			return
+// 		}
+// 		post.Trace = trace
+// 		if err := database.DB.Db.Save(&post).Error; err != nil {
+// 			log.Printf("Failed to update post trace: %v", err)
+// 			return
+// 		}
+// 	}()
+
+// 	return c.Status(fiber.StatusCreated).JSON(post)
+// }
 
 func GetAllPostsID(c *fiber.Ctx) error {
 	var posts []models.Post
@@ -262,7 +209,7 @@ func GetAllPosts(c *fiber.Ctx) error {
 
 	// Lấy tất cả bài đăng
 	var posts []models.Post
-	if err := database.DB.Db.Preload("Testcase").Where("is_deleted = ?", false).Find(&posts).Error; err != nil {
+	if err := database.DB.Db.Preload("Testcase").Where("post_status IN (?)", []string{"active", "similar"}).Find(&posts).Error; err != nil {
 		log.Printf("Failed to fetch posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch posts",
@@ -355,7 +302,7 @@ func GetPost(c *fiber.Ctx) error {
 
 	// Lấy bài đăng và testcase
 	var post models.Post
-	if err := database.DB.Db.Where("id = ? AND is_deleted = ?", postID, false).First(&post).Error; err != nil {
+	if err := database.DB.Db.Where("id = ? AND post_status IN (?)", postID, []string{"active", "similar"}).First(&post).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Post not found or has been deleted",
 		})
@@ -582,7 +529,7 @@ func DeletePost(c *fiber.Ctx) error {
 
 	// Tìm bài post
 	var post models.Post
-	if err := database.DB.Db.Where("id = ? AND is_deleted = ?", postID, false).First(&post).Error; err != nil {
+	if err := database.DB.Db.Where("id = ? AND post_status IN (?)", postID, []string{"active", "similar"}).First(&post).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Post not found or already deleted",
@@ -601,8 +548,8 @@ func DeletePost(c *fiber.Ctx) error {
 		})
 	}
 
-	// Cập nhật is_deleted thành true
-	if err := database.DB.Db.Model(&post).Update("is_deleted", true).Error; err != nil {
+	// Cập nhật post_status thành true
+	if err := database.DB.Db.Model(&post).Update("post_status", "deleted").Error; err != nil {
 		log.Printf("Failed to delete post: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to delete post",
@@ -716,7 +663,7 @@ func GetPostForStudent(c *fiber.Ctx) error {
 
 	var allPosts []models.Post
 	if err := database.DB.Db.Preload("Testcase").
-		Where("is_deleted = ?", false).
+		Where("post_status IN (?)", []string{"active", "similar"}).
 		Find(&allPosts).Error; err != nil {
 		log.Printf("Failed to fetch all posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -856,7 +803,7 @@ func ReadPost(c *fiber.Ctx) error {
 
 	err := database.DB.Db.Transaction(func(tx *gorm.DB) error {
 		var post models.Post
-		if err := tx.First(&post, "id = ? AND is_deleted = ?", req.PostID, false).Error; err != nil {
+		if err := tx.First(&post, "id = ? AND post_status IN (?)", req.PostID, []string{"active", "similar"}).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Post not found or has been deleted",
 			})
@@ -871,10 +818,14 @@ func ReadPost(c *fiber.Ctx) error {
 
 		post.Views++
 		switch req.PostType {
+		case 0:
+			post.ViewsByRandom++
 		case 1:
 			post.ViewsBySuggest++
 		case 2:
 			post.ViewsBySearch++
+		case 3:
+			post.ViewsByRelated++
 		}
 
 		user.ReadPosts++
@@ -885,6 +836,8 @@ func ReadPost(c *fiber.Ctx) error {
 			user.ReadSuggestedPosts++
 		case 2:
 			user.ReadSearchPosts++
+		case 3:
+			user.ReadRelatedPosts++
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Invalid post_type value",
@@ -946,7 +899,7 @@ func SearchPosts(c *fiber.Ctx) error {
 	var searchPosts []models.Post
 	if err := database.DB.Db.Preload("Testcase").
 		Where("title LIKE ? OR description LIKE ?", "%"+query+"%", "%"+query+"%").
-		Where("is_deleted = ?", false).
+		Where("post_status IN (?)", []string{"active", "similar"}).
 		Find(&searchPosts).Error; err != nil {
 		log.Printf("Failed to search posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -1039,8 +992,8 @@ func SearchPosts(c *fiber.Ctx) error {
 				CommentCount:        stat.CommentCount,
 				LikeID:              stat.LikeID,
 				VerifiedTeacherMail: stat.VerifiedTeacherMail,
-				Views:               stat.Views, // Lấy từ PostStats
-				Runs:                stat.Runs,  // Lấy từ PostStats
+				Views:               stat.Views,
+				Runs:                stat.Runs,
 			},
 		})
 	}

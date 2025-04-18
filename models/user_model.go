@@ -14,6 +14,7 @@ type User struct {
 	RunSuggestedPosts  int    `json:"-" gorm:"type:int;default:0"`
 	SearchPosts        int    `json:"-" gorm:"type:int;default:0"`
 	ReadSearchPosts    int    `json:"-" gorm:"type:int;default:0"`
+	ReadRelatedPosts   int    `json:"-" gorm:"type:int;default:0"`
 }
 type GoogleUser struct {
 	Email         string `json:"email"`

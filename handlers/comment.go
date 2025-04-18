@@ -54,7 +54,7 @@ func GetPostComment(c *fiber.Ctx) error {
 	}
 
 	var comments []models.Comment
-	if err := database.DB.Db.Where("post_id = ? AND is_deleted = ?", id, false).Find(&comments).Error; err != nil {
+	if err := database.DB.Db.Where("post_id = ? AND post_status IN (?)", id, []string{"active", "similar"}).Find(&comments).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch comments: " + err.Error(),
 		})
@@ -87,7 +87,7 @@ func UpdateComment(c *fiber.Ctx) error {
 
 	// Tìm comment
 	comment := new(models.Comment)
-	if err := database.DB.Db.Where("id = ? AND is_deleted = ?", id, false).First(&comment).Error; err != nil {
+	if err := database.DB.Db.Where("id = ? AND post_status IN (?)", id, []string{"active", "similar"}).First(&comment).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Comment not found or already deleted",
 		})
@@ -142,7 +142,7 @@ func DeleteComment(c *fiber.Ctx) error {
 
 	// Tìm comment
 	comment := new(models.Comment)
-	if err := database.DB.Db.Where("id = ? AND is_deleted = ?", id, false).First(&comment).Error; err != nil {
+	if err := database.DB.Db.Where("id = ? AND post_status IN (?)", id, []string{"active", "similar"}).First(&comment).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Comment not found or already deleted",
 		})
@@ -199,7 +199,7 @@ func UpdateCommentFormData(c *fiber.Ctx) error {
 
 	// Tìm comment
 	comment := new(models.Comment)
-	if err := database.DB.Db.Where("id = ? AND is_deleted = ?", commentID, false).First(comment).Error; err != nil {
+	if err := database.DB.Db.Where("id = ? AND post_status IN (?)", commentID, []string{"active", "similar"}).First(comment).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Comment not found or already deleted",
 		})

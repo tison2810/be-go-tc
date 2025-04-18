@@ -41,7 +41,7 @@ func GetLikedPosts(c *fiber.Ctx) error {
 
 	// Truy vấn các bài post tương ứng
 	var posts []models.Post
-	if err := database.DB.Db.Where("id IN ? AND is_deleted = ?", postIDs, false).
+	if err := database.DB.Db.Where("id IN ? AND post_status IN (?)", postIDs, []string{"active", "similar"}).
 		Preload("Testcase").Find(&posts).Error; err != nil {
 		log.Printf("Failed to fetch posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -115,7 +115,7 @@ func GetUserPosts(c *fiber.Ctx) error {
 
 	// Truy vấn các bài post của người dùng
 	var posts []models.Post
-	if err := database.DB.Db.Where("user_mail = ? AND is_deleted = ?", userMail, false).
+	if err := database.DB.Db.Where("user_mail = ? AND post_status IN (?)", userMail, []string{"active", "similar"}).
 		Preload("Testcase").Find(&posts).Error; err != nil {
 		log.Printf("Failed to fetch user posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -200,7 +200,7 @@ func GetCommentedPosts(c *fiber.Ctx) error {
 
 	// Truy vấn các comment của người dùng
 	var comments []models.Comment
-	if err := database.DB.Db.Where("user_mail = ? AND is_deleted = ?", userMail, false).
+	if err := database.DB.Db.Where("user_mail = ? AND post_status IN (?)", userMail, []string{"active", "similar"}).
 		Find(&comments).Error; err != nil {
 		log.Printf("Failed to fetch user comments: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -225,7 +225,7 @@ func GetCommentedPosts(c *fiber.Ctx) error {
 
 	// Truy vấn các bài post tương ứng
 	var posts []models.Post
-	if err := database.DB.Db.Where("id IN ? AND is_deleted = ?", postIDs, false).
+	if err := database.DB.Db.Where("id IN ? AND post_status IN (?)", postIDs, []string{"active", "similar"}).
 		Preload("Testcase").Find(&posts).Error; err != nil {
 		log.Printf("Failed to fetch commented posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -299,7 +299,7 @@ func GetUserComments(c *fiber.Ctx) error {
 
 	// Truy vấn các comment của người dùng
 	var comments []models.Comment
-	if err := database.DB.Db.Where("user_mail = ? AND is_deleted = ?", userMail, false).
+	if err := database.DB.Db.Where("user_mail = ? AND post_status IN (?)", userMail, []string{"active", "similar"}).
 		Find(&comments).Error; err != nil {
 		log.Printf("Failed to fetch user comments: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -324,7 +324,7 @@ func GetUserComments(c *fiber.Ctx) error {
 
 	// Truy vấn các bài post tương ứng
 	var posts []models.Post
-	if err := database.DB.Db.Where("id IN ? AND is_deleted = ?", postIDs, false).
+	if err := database.DB.Db.Where("id IN ? AND post_status IN (?)", postIDs, []string{"active", "similar"}).
 		Preload("Testcase").Find(&posts).Error; err != nil {
 		log.Printf("Failed to fetch posts: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

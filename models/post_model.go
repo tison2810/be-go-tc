@@ -14,10 +14,12 @@ type Post struct {
 	Description    string       `json:"description" gorm:"type:text;not null"`
 	LastModified   time.Time    `json:"last_modified" gorm:"autoCreateTime"`
 	Trace          string       `json:"-" gorm:"type:varchar(255)"`
-	IsDeleted      bool         `json:"-" gorm:"type:boolean;default:false"`
+	PostStatus     string       `json:"-" gorm:"type:string;default:active"`
 	Views          int          `json:"-" gorm:"type:int;default:0"`
+	ViewsByRandom  int          `json:"-" gorm:"type:int;default:0"`
 	ViewsBySuggest int          `json:"-" gorm:"type:int;default:0"`
 	ViewsBySearch  int          `json:"-" gorm:"type:int;default:0"`
+	ViewsByRelated int          `json:"-" gorm:"type:int;default:0"`
 	Runs           int          `json:"-" gorm:"type:int;default:0"`
 	RunsBySuggest  int          `json:"-" gorm:"type:int;default:0"`
 	Testcase       *Testcase    `json:"testcase" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
@@ -48,7 +50,7 @@ type StudentRunTestcase struct {
 	ID          uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
 	PostID      uuid.UUID `json:"post_id" gorm:"type:uuid"`
 	StudentMail string    `json:"student_mail" gorm:"type:varchar(100);primaryKey"`
-	Log         string    `json:"log" gorm:"type:varchar(255)"`
+	Log         string    `json:"log" gorm:"type:text;not null"`
 	Score       int       `json:"score" gorm:"type:int"`
 	Time        time.Time `json:"time" gorm:"autoCreateTime"`
 
