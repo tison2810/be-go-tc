@@ -3,13 +3,15 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// var jwtKey = []byte(os.Getenv("JWT_SECRET"))
-var jwtKey = []byte("super-secret-key")
+var jwtKey = []byte(os.Getenv("JWT_SECRET"))
+
+// var jwtKey = []byte("super-secret-key")
 
 // GenerateJWT tạo JWT với email và thời gian sống 24 giờ
 func GenerateJWT(email string, role string) (string, error) {

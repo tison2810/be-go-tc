@@ -7,7 +7,7 @@ import (
 )
 
 func privateRoutes(app *fiber.App) {
-	private := app.Group("/", middleware.AuthMiddleware())
+	private := app.Group("/api/private", middleware.AuthMiddleware())
 	// private.Post("/create", handlers.CreatePost)
 	private.Post("/create", handlers.CreatePost)
 	private.Post("/confirm/:id", handlers.PostAnyway)
