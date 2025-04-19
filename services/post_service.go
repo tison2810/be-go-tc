@@ -117,7 +117,7 @@ func GetPostStats(userMail string, postIDs []uuid.UUID) []models.PostStats {
             COALESCE((
                 SELECT COUNT(*) 
                 FROM comments c 
-                WHERE c.post_id = p.id AND c.post_status IN ('active', 'similar')
+                WHERE c.post_id = p.id AND c.is_deleted = false
             ), 0) as comment_count,
             MAX(CASE WHEN i.user_mail = ? AND i.is_like = true THEN i.id::text END)::uuid as like_id,
             tvp.teacher_mail as verified_teacher_mail
