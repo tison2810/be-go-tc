@@ -6,5 +6,5 @@ import (
 )
 
 func publicRoutes(app *fiber.App) {
-	app.Post("/api/auth/google", handlers.GoogleAuthHandler)
+	app.Post("/auth/google", handlers.GoogleAuthHandler)
 }

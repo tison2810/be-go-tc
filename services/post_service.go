@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -144,7 +145,29 @@ func CreatePostFormData(c *fiber.Ctx) (*models.Post, error) {
 	post.Subject = "KTLT"
 
 	testcase := new(models.Testcase)
-	testcase.Input = c.FormValue("input")
+	file, err := c.FormFile("input")
+	if err == nil { // File tồn tại
+		// Mở file
+		fileHandle, err := file.Open()
+		if err != nil {
+			log.Printf("Failed to open uploaded file: %v", err)
+			return nil, fmt.Errorf("failed to open uploaded file: %v", err)
+		}
+		defer fileHandle.Close()
+
+		// Đọc nội dung file
+		fileContent, err := io.ReadAll(fileHandle)
+		if err != nil {
+			log.Printf("Failed to read uploaded file: %v", err)
+			return nil, fmt.Errorf("failed to read uploaded file: %v", err)
+		}
+
+		// Lưu nội dung vào testcase.SupFile
+		testcase.Input = string(fileContent)
+	} else if err != fiber.ErrBadRequest { // Chỉ log lỗi nếu không phải trường hợp file không được gửi
+		log.Printf("Failed to get supfile from form: %v", err)
+	}
+	// testcase.Input = c.FormValue("input")
 	testcase.Expected = c.FormValue("expected")
 	testcase.Code = c.FormValue("code")
 	if testcase.Input != "" || testcase.Expected != "" || testcase.Code != "" {
