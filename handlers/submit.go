@@ -283,7 +283,7 @@ func RunCode(c *fiber.Ctx) error {
 			"max_execution_time": 5,
 			"max_memory_usage":   1000000,
 			"compileargs":        []string{"-I .", "-std=c++11"},
-			"linkargs":           []string{"hcmcampaign.cpp"},
+			"linkargs":           []string{"hcmcampaign.cpp", "main.cpp"},
 			"args":               []string{configFileName},
 		},
 		Debug: true,

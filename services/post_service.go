@@ -271,7 +271,7 @@ func GetHotPost() []HotPost {
 		LEFT JOIN users u ON p.user_mail = u.mail
 		WHERE p.subject = 'KTLT' AND p.post_status IN ('active', 'similar')
 		ORDER BY hot_score DESC, p.created_at DESC
-		LIMIT 3
+		LIMIT 5
 		`).Scan(&hotPosts)
 	if len(hotPosts) == 0 {
 		return []HotPost{}
