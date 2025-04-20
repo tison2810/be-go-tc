@@ -14,7 +14,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/tison2810/be-go-tc/database" // Import package database
+	"github.com/tison2810/be-go-tc/database"
 	"github.com/tison2810/be-go-tc/models"
 	"github.com/tison2810/be-go-tc/utils"
 )
@@ -116,7 +116,7 @@ func GetPostStats(userMail string, postIDs []uuid.UUID) []models.PostStats {
                 WHERE i.post_id = p.id AND i.is_like = true
             ), 0) as like_count,
             COALESCE((
-                SELECT COUNT(*) 
+                SELECT COUNT(*)
                 FROM comments c 
                 WHERE c.post_id = p.id AND c.is_deleted = false
             ), 0) as comment_count,
@@ -162,20 +162,25 @@ func CreatePostFormData(c *fiber.Ctx) (*models.Post, error) {
 			return nil, fmt.Errorf("failed to read uploaded file: %v", err)
 		}
 
-		// Lưu nội dung vào testcase.SupFile
 		testcase.Input = string(fileContent)
 	} else if err != fiber.ErrBadRequest { // Chỉ log lỗi nếu không phải trường hợp file không được gửi
 		log.Printf("Failed to get supfile from form: %v", err)
 	}
-	// testcase.Input = c.FormValue("input")
 	testcase.Expected = c.FormValue("expected")
-	testcase.Code = c.FormValue("code")
+	testCode := c.FormValue("code")
+	headers := `#include "main.h"
+	#include "tc.h"
+	#include "hcmcampaign.h"
+	
+	`
+	testcase.Code = headers + testCode
 	if testcase.Input != "" || testcase.Expected != "" || testcase.Code != "" {
 		post.Testcase = testcase
 	}
 
 	post.ID = uuid.New()
-	post.LastModified = time.Now()
+	post.CreatedAt = time.Now()
+	post.LastModified = post.CreatedAt
 
 	if post.Testcase != nil {
 		post.Testcase.PostID = post.ID
@@ -239,4 +244,37 @@ func CreatePostFormData(c *fiber.Ctx) (*models.Post, error) {
 	}()
 
 	return post, nil
+}
+
+type HotPost struct {
+	ID       uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
+	Title    string    `json:"title" gorm:"type:varchar(255);not null"`
+	Author   string    `json:"author" gorm:"type:varchar(100);not null"`
+	HotScore int       `json:"hot_score" gorm:"type:int;default:0"`
+}
+
+func GetHotPost() []HotPost {
+	var hotPosts []HotPost
+	database.DB.Db.Raw(`
+		SELECT p.id, (COALESCE(i.interaction_count, 0) + COALESCE(c.comment_count, 0)) as hot_score, p.title, COALESCE(u.last_name || ' ' || u.first_name, '') AS author
+		FROM posts p
+		LEFT JOIN (
+			SELECT post_id, COUNT(*) as interaction_count
+			FROM interactions
+			GROUP BY post_id
+		) i ON p.id = i.post_id
+		LEFT JOIN (
+			SELECT post_id, COUNT(*) as comment_count
+			FROM comments
+			GROUP BY post_id
+		) c ON p.id = c.post_id
+		LEFT JOIN users u ON p.user_mail = u.mail
+		WHERE p.subject = 'KTLT' AND p.post_status IN ('active', 'similar')
+		ORDER BY hot_score DESC, p.created_at DESC
+		LIMIT 3
+		`).Scan(&hotPosts)
+	if len(hotPosts) == 0 {
+		return []HotPost{}
+	}
+	return hotPosts
 }

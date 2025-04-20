@@ -269,12 +269,14 @@ func RunCode(c *fiber.Ctx) error {
 	runSpec := models.RunSpec{
 		LanguageID:     "cpp",
 		SourceCode:     mainCode,
-		SourceFilename: "main.cpp",
+		SourceFilename: "tc.cpp",
 		Input:          "",
 		FileList: [][]interface{}{
 			{fmt.Sprintf("%scpp", studentID), "hcmcampaign.cpp"}, // Dùng studentID cho file_id
 			{fmt.Sprintf("%sh", studentID), "hcmcampaign.h"},     // Dùng studentID cho file_id
 			{"systemmainh", "main.h"},
+			{"systemmaincpp", "main.cpp"},
+			{"systemtch", "tc.h"},
 			{fileName, configFileName}, // File config cố định
 		},
 		Parameters: map[string]interface{}{

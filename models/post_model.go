@@ -13,6 +13,7 @@ type Post struct {
 	Title          string       `json:"title" gorm:"type:varchar(255);not null"`
 	Description    string       `json:"description" gorm:"type:text;not null"`
 	LastModified   time.Time    `json:"last_modified" gorm:"autoCreateTime"`
+	CreatedAt      time.Time    `json:"created_at" gorm:"autoCreateTime"`
 	Trace          string       `json:"-" gorm:"type:varchar(255)"`
 	PostStatus     string       `json:"-" gorm:"type:string;default:active"`
 	Views          int          `json:"-" gorm:"type:int;default:0"`

@@ -366,143 +366,103 @@ func GetPost(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(resultPost)
 }
 
-func UpdatePost(c *fiber.Ctx) error {
-	id := c.Params("id")
-	post := new(models.Post)
-	result := database.DB.Db.Where("id = ?", id).Preload("Testcase").First(&post)
-	if result.Error != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Post not found",
-		})
-	}
+// func UpdatePost(c *fiber.Ctx) error {
+// 	id := c.Params("id")
+// 	post := new(models.Post)
+// 	result := database.DB.Db.Where("id = ?", id).Preload("Testcase").First(&post)
+// 	if result.Error != nil {
+// 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+// 			"error": "Post not found",
+// 		})
+// 	}
 
-	if err := c.BodyParser(post); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-	post.LastModified = time.Now()
-	if err := database.DB.Db.Save(&post).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update post",
-		})
-	}
+// 	if err := c.BodyParser(post); err != nil {
+// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"error": err.Error(),
+// 		})
+// 	}
+// 	post.LastModified = time.Now()
+// 	if err := database.DB.Db.Save(&post).Error; err != nil {
+// 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+// 			"error": "Failed to update post",
+// 		})
+// 	}
 
-	if post.Testcase != nil {
-		post.Testcase.PostID = post.ID
-		if err := database.DB.Db.Save(&post.Testcase).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to update testcase",
-			})
-		}
-	} else {
-		newTestcase := models.Testcase{
-			PostID:   post.ID,
-			Input:    post.Testcase.Input,
-			Expected: post.Testcase.Expected,
-			Code:     post.Testcase.Code,
-		}
-		if err := database.DB.Db.Create(&newTestcase).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to create new testcase",
-			})
-		}
-	}
+// 	if post.Testcase != nil {
+// 		post.Testcase.PostID = post.ID
+// 		if err := database.DB.Db.Save(&post.Testcase).Error; err != nil {
+// 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+// 				"error": "Failed to update testcase",
+// 			})
+// 		}
+// 	} else {
+// 		newTestcase := models.Testcase{
+// 			PostID:   post.ID,
+// 			Input:    post.Testcase.Input,
+// 			Expected: post.Testcase.Expected,
+// 			Code:     post.Testcase.Code,
+// 		}
+// 		if err := database.DB.Db.Create(&newTestcase).Error; err != nil {
+// 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+// 				"error": "Failed to create new testcase",
+// 			})
+// 		}
+// 	}
 
-	return c.Status(fiber.StatusOK).JSON(post)
-}
+// 	return c.Status(fiber.StatusOK).JSON(post)
+// }
 
-func UpdatePostFormData(c *fiber.Ctx) error {
-	// Lấy post_id từ params
-	id := c.Params("id")
-	if id == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Post ID is required",
-		})
-	}
-	postID, err := uuid.Parse(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid post ID",
-		})
-	}
+// func UpdatePostFormData(c *fiber.Ctx) error {
+// 	// Lấy post_id từ params
+// 	id := c.Params("id")
+// 	if id == "" {
+// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"error": "Post ID is required",
+// 		})
+// 	}
+// 	postID, err := uuid.Parse(id)
+// 	if err != nil {
+// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"error": "Invalid post ID",
+// 		})
+// 	}
 
-	// Tìm bài đăng hiện tại
-	post := new(models.Post)
-	result := database.DB.Db.Where("id = ?", postID).Preload("Testcase").First(post)
-	if result.Error != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Post not found",
-		})
-	}
+// 	// Tìm bài đăng hiện tại
+// 	post := new(models.Post)
+// 	result := database.DB.Db.Where("id = ?", postID).Preload("Testcase").First(post)
+// 	if result.Error != nil {
+// 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+// 			"error": "Post not found",
+// 		})
+// 	}
 
-	// Lấy dữ liệu từ form-data
-	subject := c.FormValue("subject")
-	title := c.FormValue("title")
-	description := c.FormValue("description")
-	trace := c.FormValue("trace")
-	testcaseInput := c.FormValue("testcase_input")
-	testcaseExpected := c.FormValue("testcase_expected")
-	testcaseCode := c.FormValue("testcase_code")
+// 	// Lấy dữ liệu từ form-data
+// 	title := c.FormValue("title")
+// 	description := c.FormValue("description")
+// 	// testcaseInput := c.FormValue("input")
 
-	// Cập nhật các trường của Post nếu có giá trị mới
-	if subject != "" {
-		post.Subject = subject
-	}
-	if title != "" {
-		post.Title = title
-	}
-	if description != "" {
-		post.Description = description
-	}
-	if trace != "" {
-		post.Trace = trace
-	}
-	post.LastModified = time.Now()
+// 	// Cập nhật các trường của Post nếu có giá trị mới
+// 	if title != "" {
+// 		post.Title = title
+// 	}
+// 	if description != "" {
+// 		post.Description = description
+// 	}
+// 	post.LastModified = time.Now()
 
-	// Lưu Post vào database
-	if err := database.DB.Db.Save(post).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update post",
-		})
-	}
+// 	// Lưu Post vào database
+// 	if err := database.DB.Db.Save(post).Error; err != nil {
+// 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+// 			"error": "Failed to update post",
+// 		})
+// 	}
 
-	// Xử lý Testcase
-	if post.Testcase != nil {
-		// Cập nhật Testcase hiện có
-		if testcaseInput != "" {
-			post.Testcase.Input = testcaseInput
-		}
-		if testcaseExpected != "" {
-			post.Testcase.Expected = testcaseExpected
-		}
-		if testcaseCode != "" {
-			post.Testcase.Code = testcaseCode
-		}
-		post.Testcase.PostID = post.ID
-		if err := database.DB.Db.Save(post.Testcase).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to update testcase",
-			})
-		}
-	} else if testcaseInput != "" || testcaseExpected != "" || testcaseCode != "" {
-		// Tạo Testcase mới nếu không tồn tại và có dữ liệu
-		newTestcase := models.Testcase{
-			PostID:   post.ID,
-			Input:    testcaseInput,
-			Expected: testcaseExpected,
-			Code:     testcaseCode,
-		}
-		if err := database.DB.Db.Create(&newTestcase).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to create new testcase",
-			})
-		}
-		post.Testcase = &newTestcase
-	}
+// 	// Xử lý Testcas
+// 		post.Testcase = &newTestcase
+// 	}
 
-	return c.Status(fiber.StatusOK).JSON(post)
-}
+// 	return c.Status(fiber.StatusOK).JSON(post)
+// }
 
 func DeletePost(c *fiber.Ctx) error {
 	// Lấy email từ Locals (do AuthMiddleware cung cấp)
@@ -1078,4 +1038,15 @@ func CheckFileExist(c *fiber.Ctx) error {
 			},
 		})
 	}
+}
+
+func GetHotPosts(c *fiber.Ctx) error {
+	email, ok := c.Locals("email").(string)
+	if !ok || email == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User email not found in context",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(services.GetHotPost())
 }
