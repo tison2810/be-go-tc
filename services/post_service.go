@@ -167,13 +167,14 @@ func CreatePostFormData(c *fiber.Ctx) (*models.Post, error) {
 		log.Printf("Failed to get supfile from form: %v", err)
 	}
 	testcase.Expected = c.FormValue("expected")
-	testCode := c.FormValue("code")
-	headers := `#include "main.h"
-	#include "tc.h"
-	#include "hcmcampaign.h"
-	
-	`
-	testcase.Code = headers + testCode
+	// testCode := c.FormValue("code")
+	// headers := `#include "main.h"
+	// #include "tc.h"
+	// #include "hcmcampaign.h"
+
+	// `
+	// testcase.Code = headers + testCode
+	testcase.Code = c.FormValue("code")
 	if testcase.Input != "" || testcase.Expected != "" || testcase.Code != "" {
 		post.Testcase = testcase
 	}

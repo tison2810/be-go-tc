@@ -40,7 +40,7 @@ func CreatePost(c *fiber.Ctx) error {
 		if err := database.DB.Db.Model(&models.Post{}).Where("id = ?", post.ID).UpdateColumn("post_status", "similar_hidden").Error; err != nil {
 			log.Printf("Failed to delete post when duplicate: %v", err)
 		}
-		return c.Status(fiber.StatusFound).JSON(fiber.Map{
+		return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
 			"post":          post,
 			"similar_posts": similarPosts,
 		})
@@ -1002,8 +1002,8 @@ func CheckFileExist(c *fiber.Ctx) error {
 			return fiber.StatusNoContent, "File exists in Jobe cache", nil
 		case http.StatusBadRequest: // 400
 			return fiber.StatusBadRequest, "Missing fileID in url", nil
-		case http.StatusNotFound: // 404
-			return fiber.StatusNotFound, "File not found in Jobe cache", nil
+		case http.StatusNotFound: // 202
+			return fiber.StatusAccepted, "File not found in Jobe cache", nil
 		default:
 			return fiber.StatusBadGateway, fmt.Sprintf("Unexpected response code from Jobe: %d", resp.StatusCode), nil
 		}

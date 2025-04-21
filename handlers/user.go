@@ -200,7 +200,7 @@ func GetCommentedPosts(c *fiber.Ctx) error {
 
 	// Truy vấn các comment của người dùng
 	var comments []models.Comment
-	if err := database.DB.Db.Where("user_mail = ? AND post_status IN (?)", userMail, []string{"active", "similar"}).
+	if err := database.DB.Db.Where("user_mail = ? AND is_deleted = ?", userMail, false).
 		Find(&comments).Error; err != nil {
 		log.Printf("Failed to fetch user comments: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -299,7 +299,7 @@ func GetUserComments(c *fiber.Ctx) error {
 
 	// Truy vấn các comment của người dùng
 	var comments []models.Comment
-	if err := database.DB.Db.Where("user_mail = ? AND post_status IN (?)", userMail, []string{"active", "similar"}).
+	if err := database.DB.Db.Where("user_mail = ? AND is_deleted = ?", userMail, false).
 		Find(&comments).Error; err != nil {
 		log.Printf("Failed to fetch user comments: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

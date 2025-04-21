@@ -152,8 +152,14 @@ func RunCode(c *fiber.Ctx) error {
 		})
 	}
 
-	mainCode := testcase.Code
+	// mainCode := testcase.Code
 
+	headers := `#include "main.h"
+	#include "tc.h"
+	#include "hcmcampaign.h"
+
+	`
+	mainCode := headers + testcase.Code
 	var postType int
 	suggestedPosts, err := flaskClient.CallSuggest(studentMail)
 	if err != nil {

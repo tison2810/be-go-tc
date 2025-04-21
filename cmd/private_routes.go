@@ -44,7 +44,7 @@ func privateRoutes(app *fiber.App) {
 	private.Get("/user/posts", handlers.GetUserPosts)
 	private.Get("/user/likedposts", handlers.GetLikedPosts)
 	private.Get("/user/commentposts/:id", handlers.GetPostComment)
-	private.Get("/user/comments", handlers.GetUserComments)
+	private.Get("/user/commentedposts", handlers.GetUserComments)
 
 	// private.Post("/interactions", handlers.CreateInteraction)
 	// private.Get("/interactions", handlers.GetAllInteractions)
